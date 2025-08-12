@@ -288,7 +288,61 @@ def start_game_api(request):
     except Exception:
         return JsonResponse({'error': '게임 시작 중 오류가 발생했습니다.'}, status=500)
 
+def select_category_cpu_api(request):
+    try:
+        game_state = request.session.get('game_state')
+        if not game_state or game_state.get('is_over'):
+            return JsonResponse({'error': '활성화된 게임이 없습니다.'}, status=400)
 
+        player = game_state['players'][game_state['current_player_index']]
+        # ✅ CPU만 허용
+        if not player.get('is_cpu'):
+            return JsonResponse({'error': '사람 플레이어는 일반 엔드포인트를 사용하세요.'}, status=400)
+
+        data = json.loads(request.body)
+        category = data.get('category')
+
+        # 기본 유효성
+        if category not in CATEGORIES or player['scoreboard'][category] is not None or game_state['rolls_left'] == 3:
+            return JsonResponse({'error': '잘못된 행동입니다.'}, status=400)
+
+        # (원래 CPU 턴에서도 저장하던 것과 동일)
+        turn_buf = _get_turn_buf(game_state)
+        turn_buf['score_state_before'] = deepcopy(player['scoreboard'])
+
+        # 점수 반영
+        score = score_category(game_state['dice'], category)
+        player['scoreboard'][category] = score
+        game_state['log'].append(f"[{player['display_name']}]가 '{category}'를 선택하여 {score}점을 얻었습니다.")
+
+        # 다음 플레이어/턴
+        game_state['current_player_index'] = (game_state['current_player_index'] + 1) % len(game_state['players'])
+        if game_state['current_player_index'] == 0:
+            game_state['current_turn'] += 1
+
+        # 턴 리셋
+        game_state['rolls_left'] = 3
+        game_state['dice'] = [0, 0, 0, 0, 0]
+        game_state['kept_indices'] = []
+        _reset_turn_buf(game_state)
+
+        # 종료 처리(사람만 총점 기록 갱신)
+        if game_state['current_turn'] > 12:
+            game_state['is_over'] = True
+            for p in game_state['players']:
+                if not p['is_cpu']:
+                    up = calculate_upper_score(p['scoreboard'])
+                    bonus = calculate_bonus(up)
+                    total = sum(v for v in p['scoreboard'].values() if v is not None) + bonus
+                    GameSession.objects.filter(game_id=game_state['game_id']).update(
+                        total_score=total, player_name=p['display_name']
+                    )
+
+        request.session['game_state'] = game_state
+        return JsonResponse(game_state)
+
+    except Exception as e:
+        return JsonResponse({'error': 'CPU 카테고리 확정 중 오류', 'detail': str(e)}, status=500)
 @require_POST
 def roll_dice_api(request):
     try:

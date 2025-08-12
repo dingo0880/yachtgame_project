@@ -541,7 +541,7 @@ async function handlePlayCpuTurnML(gs){
       }
 
       if(category){
-        state = await apiCall('/api/select-category/','POST',{ category });
+        state = await apiCall('/api/cpu/select-category/','POST',{ category });
         renderGame(state);
       }else{
         // 폴백: 기존 서버 CPU 한 턴 실행해서 마무리

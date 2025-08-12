@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/ml/keep', ml_keep_decision, name='ml_keep_decision'),
     path('api/ml/category', ml_category_decision, name='ml_category_decision'),
     path('api/ml/health', ml_health, name='ml_health'),
+    path('api/cpu/select-category/', views.select_category_cpu_api, name='select_category_cpu_api'),
 
     # --- 개발자 CSV ---
     path('api/dev/export/', views.export_logs_csv, name='export_logs_csv'),
