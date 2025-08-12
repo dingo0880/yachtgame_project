@@ -3,25 +3,26 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Yacht (Yahtzee) – Modern UI</title>
+  <title>Yacht (Yahtzee) – Coral Light</title>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
   <script src="https://www.google.com/recaptcha/api.js?render=6Le9yqArAAAAAJiYF7VyQgPrEwyu1ax5OwNe4fNq"></script>
 
   <style>
     :root{
-      --bg: #0b0f14;
-      --panel: rgba(255,255,255,.06);
-      --panel-strong: rgba(255,255,255,.10);
-      --border: rgba(255,255,255,.12);
-      --text: #e6eaf0;
-      --muted: #9aa3af;
-      --accent: #7c5cff;     /* 메인 포인트컬러 */
-      --accent-2: #22d3ee;   /* 보조 포인트컬러 */
-      --success: #22c55e;
-      --danger: #ef4444;
-      --yellow: #fbbf24;
-      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      /* ---- 밝은 코랄 테마 ---- */
+      --bg: #fff8f6;
+      --panel: rgba(255,255,255,0.85);
+      --panel-strong: rgba(255,255,255,0.95);
+      --border: rgba(0,0,0,0.08);
+      --text: #15202b;
+      --muted: #586174;
+      --accent: #ff7a70;    /* 코랄 */
+      --accent-2: #ffb3a9;  /* 연코랄 */
+      --success: #16a34a;
+      --danger: #e11d48;
+      --yellow: #f59e0b;
+      --shadow: 0 10px 22px rgba(24,24,24,.08);
       --radius: 16px;
     }
 
@@ -31,9 +32,9 @@
       margin:0;color:var(--text);
       font-family:Inter, "Noto Sans KR", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       background:
-        radial-gradient(1200px 800px at 10% -10%, #112 0%, transparent 60%),
-        radial-gradient(900px 700px at 120% 20%, #10162a 0%, transparent 55%),
-        linear-gradient(180deg, #0b0f14 0%, #0b0f14 100%);
+        radial-gradient(900px 600px at -10% -10%, #ffe8e4 0%, transparent 60%),
+        radial-gradient(900px 600px at 110% 0%, #ffeceb 0%, transparent 55%),
+        linear-gradient(180deg, #fff8f6 0%, #fffdfc 100%);
       overflow-y:auto;
     }
 
@@ -45,8 +46,8 @@
 
     .glass{
       background:var(--panel);
-      backdrop-filter: blur(14px) saturate(120%);
-      -webkit-backdrop-filter: blur(14px) saturate(120%);
+      backdrop-filter: blur(10px) saturate(120%);
+      -webkit-backdrop-filter: blur(10px) saturate(120%);
       border:1px solid var(--border);
       border-radius:var(--radius);
       box-shadow: var(--shadow);
@@ -54,20 +55,22 @@
 
     .btn{
       appearance:none;border:0;cursor:pointer;
-      padding:14px 18px;border-radius:12px;
+      padding:12px 16px;border-radius:12px;
       color:#fff;font-weight:700;letter-spacing:.2px;
-      transition: transform .15s ease, box-shadow .2s ease, background .2s ease, opacity .2s ease;
-      background: linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%);
-      box-shadow: 0 6px 16px rgba(124,92,255,.35);
+      transition: transform .12s ease, box-shadow .15s ease, background .15s ease, opacity .15s ease;
+      background: linear-gradient(135deg, var(--accent) 0%, #ff6b6b 100%);
+      box-shadow: 0 6px 16px rgba(255,122,112,.28);
     }
-    .btn:hover{ transform: translateY(-2px) }
+    .btn:hover{ transform: translateY(-1px) }
     .btn:active{ transform: translateY(0) scale(.98) }
     .btn.secondary{
-      background: linear-gradient(135deg, #334155 0%, #1f2937 100%);
-      box-shadow: 0 6px 16px rgba(31,41,55,.35);
+      background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+      color:#0f172a;
+      box-shadow: 0 6px 14px rgba(148,163,184,.25);
+      border:1px solid var(--border);
     }
     .btn.ghost{
-      background:transparent; border:1px solid var(--border); color:var(--text);
+      background:#ffffff; border:1px solid var(--border); color:var(--text);
       box-shadow:none;
     }
     .btn:disabled{ opacity:.6; cursor:not-allowed; transform:none; box-shadow:none; }
@@ -75,20 +78,20 @@
     .headline{
       display:flex;align-items:center;gap:10px;margin:0 0 14px 0;
       font-weight:800; letter-spacing:.2px;
-      background: linear-gradient(90deg, #fff, #c2c8d2);
+      background: linear-gradient(90deg, #ff6b6b, #ff9d8f);
       -webkit-background-clip:text; background-clip:text; color: transparent;
     }
 
-    /* ---------- 메인 메뉴 모달 ---------- */
+    /* ---------- 모달 ---------- */
     .modal-overlay{
       position: fixed; inset:0; display:flex; justify-content:center; align-items:center;
-      background: rgba(5,8,12,.65);
+      background: rgba(255, 244, 241, .75);
       z-index:1000;
-      transition: opacity .2s ease;
+      transition: opacity .18s ease;
     }
     .modal-content{
       width:min(560px, calc(100vw - 40px));
-      padding:24px 22px 20px;
+      padding:22px 20px 18px;
     }
     .modal-content h2{ margin:0 0 14px 0; font-size:22px }
     .modal-grid{
@@ -100,19 +103,19 @@
     }
     .modal-content input, .modal-content select{
       width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border);
-      background: rgba(255,255,255,.04); color:var(--text); outline:none;
+      background:#fff; color:var(--text); outline:none;
     }
 
     /* ---------- 게임 패널 ---------- */
     .game-area{
       flex:0 0 460px; padding:20px; position:relative;
     }
-    .game-area h2{ margin:0 0 8px 0; font-size:18px; font-weight:800 }
+    .game-area h2{ margin:0 0 8px 0; font-size:18px; font-weight:800; color:#0f172a }
     .game-area .badge{
       display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px;
-      background: rgba(124,92,255,.18); border:1px solid rgba(124,92,255,.35); color:#c9b9ff;
+      background: rgba(255,107,107,.12); border:1px solid rgba(255,107,107,.35); color:#b4231f;
     }
-    .is-current{ outline: 2px solid rgba(124,92,255,.6); box-shadow: 0 0 0 6px rgba(124,92,255,.12) inset; }
+    .is-current{ outline: 2px solid rgba(255,107,107,.35); box-shadow: 0 0 0 6px rgba(255,107,107,.12) inset; }
 
     .dice-area{
       margin:14px 0 14px 0; height:86px; display:flex; justify-content:center; gap:12px;
@@ -121,18 +124,18 @@
     .dice{
       width:64px; height:64px; border-radius:14px;
       display:grid; place-items:center; font-size:30px; user-select:none; cursor:pointer;
-      color:#e8ebf5; border:1px solid rgba(255,255,255,.14);
+      color:#1f2937; border:1px solid rgba(0,0,0,.08);
       background:
-        radial-gradient(180% 120% at 100% 0%, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 45%, rgba(255,255,255,0) 100%),
-        rgba(255,255,255,.04);
-      transition: transform .15s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease;
+        radial-gradient(180% 120% at 100% 0%, rgba(255,255,255,.85) 0%, rgba(255,255,255,.7) 45%, rgba(255,255,255,0.6) 100%),
+        #ffffff;
+      transition: transform .1s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease;
     }
-    .dice:hover{ transform: translateY(-2px); box-shadow:0 10px 20px rgba(0,0,0,.25); }
+    .dice:hover{ transform: translateY(-2px); box-shadow:0 8px 16px rgba(0,0,0,.08); }
     .dice.kept{
-      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-      color:#2b2000; border-color:rgba(0,0,0,.2);
+      background: linear-gradient(135deg, #ffd2c9 0%, #ffc0b5 100%);
+      color:#0f172a; border-color:rgba(0,0,0,.1);
       transform: translateY(-3px);
-      box-shadow: 0 10px 22px rgba(251,191,36,.28);
+      box-shadow: 0 10px 20px rgba(255, 148, 133, .25);
     }
     @keyframes roll {
       0%{ transform: rotate(0) scale(1) }
@@ -140,7 +143,7 @@
       70%{ transform: rotate(-18deg) scale(1.05) }
       100%{ transform: rotate(0) scale(1) }
     }
-    .dice.rolling{ animation: roll .5s ease-in-out }
+    .dice.rolling{ animation: roll .45s ease-in-out }
 
     .controls{ display:flex; align-items:center; gap:12px; margin:6px 0 12px }
     .controls small{ color:var(--muted) }
@@ -149,41 +152,38 @@
     .log-container{
       flex:1 1 320px; padding:18px; min-height:420px;
     }
-    .log-container h3{ margin:0 0 10px 0; font-size:16px; font-weight:800 }
+    .log-container h3{ margin:0 0 10px 0; font-size:16px; font-weight:800; color:#0f172a }
     #game-log{
       margin-top:8px; border-radius:12px; border:1px solid var(--border);
-      background: rgba(255,255,255,.03); padding:12px; height:400px; overflow:auto;
-      font-size:13px; line-height:1.5;
+      background: #ffffff; padding:12px; height:400px; overflow:auto;
+      font-size:13px; line-height:1.5; color:#111827;
     }
-    #game-log p{ margin:0 0 6px 0; color:#d2d7e2 }
+    #game-log p{ margin:0 0 6px 0; }
 
     /* ---------- 스코어보드 ---------- */
     .scoreboard{
       width:100%; border-collapse:separate; border-spacing:0; overflow:hidden;
-      border-radius:12px; border:1px solid var(--border);
+      border-radius:12px; border:1px solid var(--border); background:#fff;
     }
     .scoreboard thead th{
       text-align:left; padding:12px 14px;
-      background: linear-gradient(180deg, rgba(124,92,255,.18), rgba(124,92,255,.06));
-      color:#e9e5ff; font-weight:800; letter-spacing:.2px;
+      background: linear-gradient(180deg, rgba(255,122,112,.15), rgba(255,122,112,.06));
+      color:#7a1e18; font-weight:800; letter-spacing:.2px;
     }
-    .scoreboard tbody tr{
-      transition: background .15s ease, color .15s ease;
-    }
+    .scoreboard tbody tr{ transition: background .12s ease, color .12s ease; }
     .scoreboard td{
-      padding:10px 14px; border-top:1px solid rgba(255,255,255,.06);
+      padding:10px 14px; border-top:1px solid rgba(0,0,0,.06); color:#0f172a;
     }
     .score-category{ cursor:pointer }
-    .score-category:hover:not(.filled){ background: rgba(124,92,255,.08) }
-    .score-category.filled{ color:#94a3b8; background: rgba(148,163,184,.06); cursor:not-allowed }
+    .score-category:hover:not(.filled){ background: rgba(255,122,112,.08) }
+    .score-category.filled{ color:#64748b; background: #f8fafc; cursor:not-allowed }
     .score-category td:last-child{ text-align:right; font-weight:700 }
-    .score-summary td{ font-weight:800; background:rgba(255,255,255,.03) }
-    .preview-score{ color:#8bffb0; font-style:italic }
+    .score-summary td{ font-weight:800; background:#fdf2f2 }
+
+    .preview-score{ color:#14803a; font-style:italic }
 
     /* ---------- DEV 모달 ---------- */
     #dev-modal .modal-content{ width:min(680px, calc(100vw - 40px)); }
-    #dev-modal label{ font-size:12px; color:var(--muted) }
-    #dev-msg{ color:var(--muted) }
 
     /* ---------- 반응형 ---------- */
     @media (max-width:1100px){
@@ -192,8 +192,8 @@
       .log-container{ flex:1 1 100%; order: 999 }
     }
 
-    /* subtle enter fade */
-    .fade-in{ animation: fade .25s ease }
+    /* enter fade: 첫 렌더만 사용 */
+    .fade-in{ animation: fade .22s ease }
     @keyframes fade{ from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:translateY(0)} }
   </style>
 </head>
@@ -204,7 +204,7 @@
   <!-- 메인 메뉴 -->
   <div id="main-menu-modal" class="modal-overlay">
     <div class="modal-content glass fade-in">
-      <h2 class="headline">🎲 요트(Yacht) — Modern</h2>
+      <h2 class="headline">🎲 요트(Yacht) — Coral Light</h2>
 
       <div class="modal-grid">
         <button id="menu-vs-cpu" class="btn">1. CPU와 대결</button>
@@ -227,12 +227,12 @@
 
   <!-- 셋업/서브 모달 -->
   <div id="setup-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content glass fade-in" id="setup-modal-content"></div>
+    <div class="modal-content glass" id="setup-modal-content"></div>
   </div>
 
   <!-- 이벤트 모달 -->
   <div id="event-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content glass fade-in">
+    <div class="modal-content glass">
       <h2 class="headline">🎉 이벤트 참여</h2>
       <p id="event-modal-score" style="font-weight:700; margin:.5rem 0 1rem 0;"></p>
       <p style="color:var(--muted); margin-top:-6px;">경품 추첨 이벤트에 참여하시겠어요?</p>
@@ -256,7 +256,7 @@
 
   <!-- 개발자 모달 -->
   <div id="dev-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-content glass fade-in">
+    <div class="modal-content glass">
       <h2 class="headline">🔧 개발자용 CSV 다운로드</h2>
 
       <div class="input-group">
@@ -282,11 +282,11 @@
         <button id="btn-dev-close" class="btn secondary">닫기</button>
       </div>
 
-      <div id="dev-msg" style="margin-top:10px;"></div>
+      <div id="dev-msg" style="margin-top:10px;color:#334155;"></div>
     </div>
   </div>
 
-  <!-- ===================== JS (네 기존 로직 그대로) ===================== -->
+  <!-- ===================== JS ===================== -->
   <script>
   /* -------------------- 상수/공통 -------------------- */
   const CATEGORIES = ["Ones","Twos","Threes","Fours","Fives","Sixes","Four of a Kind","Full House","Small Straight","Large Straight","Yahtzee","Chance"];
@@ -312,11 +312,14 @@
   const csrftoken = getCookie('csrftoken');
   const deepCopy = (obj) => (typeof structuredClone === 'function' ? structuredClone(obj) : JSON.parse(JSON.stringify(obj)));
 
+  /* ---- 깜빡임 억제용 플래그 ---- */
+  let FIRST_RENDER = true;
+
   /* -------------------- 라우팅/페이지 -------------------- */
   function showGameRulesModal(){
     const rulesHTML = `
       <h2 class="headline">📘 요트(Yacht) 규칙</h2>
-      <div style="text-align:left; line-height:1.7; max-height:60vh; overflow:auto;">
+      <div style="text-align:left; line-height:1.7; max-height:60vh; overflow:auto; color:#111827;">
         <h3 style="margin:10px 0 6px 0;">기본</h3>
         <ul>
           <li>총 12라운드, 각 라운드에서 주사위 5개를 최대 3번 굴립니다.</li>
@@ -339,7 +342,7 @@
       <div style="display:flex; gap:10px; margin-top:14px;">
         <button class="btn secondary" id="close-rules-btn">닫기</button>
       </div>`;
-    setupModalContent.classList.add('glass','fade-in');
+    setupModalContent.classList.add('glass');
     setupModalContent.innerHTML = rulesHTML;
     mainMenuModal.style.display='none';
     setupModal.style.display='flex';
@@ -413,14 +416,17 @@
     }
     mainMenuModal.style.display='none';
     gameContainer.style.display='flex';
+
+    // 전체 리렌더는 유지하되, 페이드인/글래스만 두고 'fade-in'은 첫 렌더 때만
     gameContainer.innerHTML='';
 
     gameState.players.forEach((player, idx)=>{
-      gameContainer.appendChild(createPlayerUI(player, idx, gameState));
+      const node = createPlayerUI(player, idx, gameState, FIRST_RENDER);
+      gameContainer.appendChild(node);
     });
 
     const logContainer = document.createElement('div');
-    logContainer.className='log-container glass';
+    logContainer.className='log-container glass' + (FIRST_RENDER ? ' fade-in' : '');
     logContainer.innerHTML = `<h3>게임 로그</h3><div id="game-log"></div>`;
     gameContainer.appendChild(logContainer);
 
@@ -434,11 +440,14 @@
       const current = gameState.players[gameState.current_player_index];
       if(current.is_cpu){ setTimeout(handlePlayCpuTurn, 1200); }
     }
+
+    // 첫 렌더 완료 후엔 애니 끔
+    if (FIRST_RENDER) FIRST_RENDER = false;
   }
 
-  function createPlayerUI(player, index, gameState){
+  function createPlayerUI(player, index, gameState, useFade){
     const el = document.createElement('div');
-    el.className='game-area glass fade-in';
+    el.className='game-area glass' + (useFade ? ' fade-in' : '');
     const isCurrent = index===gameState.current_player_index;
     if(isCurrent) el.classList.add('is-current');
 
@@ -528,10 +537,10 @@
     }).sort((a,b)=>b.score-a.score);
 
     let html = `<h2 class="headline">🏆 최종 결과</h2>`;
-    final.forEach((r,i)=>{ html += `<p style="margin:.2rem 0">${i+1}위: <b>${r.name}</b> - ${r.score}점</p>`; });
-    if(final.length>1) html += `<p style="margin-top:.6rem"><strong>🎉 최종 우승자: ${final[0].name}</strong></p>`;
+    final.forEach((r,i)=>{ html += `<p style="margin:.2rem 0;color:#111827">${i+1}위: <b>${r.name}</b> - ${r.score}점</p>`; });
+    if(final.length>1) html += `<p style="margin-top:.6rem;color:#111827"><strong>🎉 최종 우승자: ${final[0].name}</strong></p>`;
     html += `<div style="margin-top:12px"><button id="play-again-btn" class="btn">메인 메뉴로</button></div>`;
-    setupModalContent.classList.add('glass','fade-in');
+    setupModalContent.classList.add('glass');
     setupModalContent.innerHTML = html;
     setupModal.style.display='flex';
     document.getElementById('play-again-btn').addEventListener('click', ()=>location.reload());
@@ -552,6 +561,7 @@
       if(!current.is_cpu){
         gameState.turn_buf.score_state_before = deepCopy(current.scoreboard);
       }
+      FIRST_RENDER = true; // 새 게임 시작 시 첫 렌더만 페이드
       renderGame(gameState);
     }catch(e){}
   }
@@ -562,7 +572,7 @@
       if(rollBtn) rollBtn.disabled = true;
       const diceArea = document.querySelector(`.game-area.is-current .dice-area`);
       if(diceArea) diceArea.querySelectorAll('.dice:not(.kept)').forEach(el=>el.classList.add('rolling'));
-      await sleep(480);
+      await sleep(450);
       renderGame(await apiCall('/api/roll-dice/','POST'));
     }catch(e){}
   }
@@ -592,13 +602,14 @@
 
   async function handleLoadGame(){
     try{
+      FIRST_RENDER = true;
       renderGame(await apiCall('/api/get-game-state/','GET'));
     }catch(e){
       if((e.message||'').includes('404')) alert('저장된 게임이 없습니다.');
     }
   }
 
-  // ▼▼ ML형: 기존 로직 그대로
+  // ▼▼ ML형: 원본 로직 유지
   async function handlePlayCpuTurn(){
     try{
       const gs = await apiCall('/api/get-game-state/','GET');
@@ -622,7 +633,7 @@
             });
           }
         }
-        await sleep(1100);
+        await sleep(1000);
       }
       renderGame(finalState);
     }catch(e){
@@ -638,15 +649,15 @@
       const doRoll = async () => {
         const diceArea = document.querySelector(`.game-area.is-current .dice-area`);
         if(diceArea) diceArea.querySelectorAll('.dice:not(.kept)').forEach(el=>el.classList.add('rolling'));
-        await sleep(480);
+        await sleep(450);
         state = await apiCall('/api/roll-dice/','POST');
         renderGame(state, true);
-        await sleep(760);
+        await sleep(720);
       };
       const doKeep = async (indices) => {
         state = await apiCall('/api/keep-dice/','POST',{ kept_indices: indices });
         renderGame(state, true);
-        await sleep(440);
+        await sleep(400);
       };
       const currentPlayer = () => state.players[state.current_player_index];
 
@@ -695,7 +706,7 @@
           const r = await apiCall('/api/play-cpu-turn/','POST');
           const steps = r.steps;
           const finalState = r.final_state;
-          for(const step of steps){ renderGame(step, true); await sleep(760); }
+          for(const step of steps){ renderGame(step, true); await sleep(720); }
           renderGame(finalState);
         }
       }
@@ -704,7 +715,7 @@
       const r = await apiCall('/api/play-cpu-turn/','POST');
       const steps = r.steps;
       const finalState = r.final_state;
-      for(const step of steps){ renderGame(step, true); await sleep(760); }
+      for(const step of steps){ renderGame(step, true); await sleep(720); }
       renderGame(finalState);
     }
   }
@@ -713,7 +724,7 @@
   function showSetupModal(title, inputs, onStart){
     setupModal.style.display='flex';
     const inputHTML = inputs.map(i=>`<div class="input-group">${i}</div>`).join('');
-    setupModalContent.classList.add('glass','fade-in');
+    setupModalContent.classList.add('glass'); // 재오픈시 fade-in 제거
     setupModalContent.innerHTML = `
       <h2 class="headline">${title}</h2>
       ${inputHTML}
@@ -766,7 +777,7 @@
       const r = await apiCall('/api/analyze-cpu/','POST',{ cpu_type: cpuType, count: parseInt(count) });
       let html = `<h2 class="headline">✅ ${cpuType} 분석 완료!</h2>
         <p style="color:var(--muted)">총 ${r.count} 게임 시뮬레이션 결과</p>
-        <div style="text-align:left; margin-top:14px;">
+        <div style="text-align:left; margin-top:14px; color:#111827;">
           <p><strong>📊 평균 점수:</strong> ${r.mean.toFixed(2)}점</p>
           <p><strong>⬆️ 최고 점수:</strong> ${r.max}점</p>
           <p><strong>⬇️ 최저 점수:</strong> ${r.min}점</p>
@@ -784,11 +795,11 @@
       const results = await apiCall(apiUrl,'GET');
       let html = `<h2 class="headline">🏆 ${title}</h2>
         <p style="font-size:.9em;color:var(--muted);">${period}</p>
-        <div style="text-align:left;max-height:400px;overflow:auto;padding:10px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.03);">`;
+        <div style="text-align:left;max-height:400px;overflow:auto;padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff; color:#111827;">`;
       if(results.length===0) html += "<p>완료된 게임 기록이 없습니다.</p>";
       else results.forEach((r,i)=>{ html += `<p style="margin:.3rem 0"><strong>${i+1}위.</strong> ${r.player_name} - ${r.total_score}점</p>`; });
       html += `</div><div style="margin-top:12px;"><button class="btn secondary" id="back-to-menu-btn">메인 메뉴로</button></div>`;
-      setupModalContent.classList.add('glass','fade-in');
+      setupModalContent.classList.add('glass');
       setupModalContent.innerHTML = html;
       mainMenuModal.style.display='none';
       setupModal.style.display='flex';
@@ -800,17 +811,17 @@
     try{
       const logs = await apiCall('/api/get-all-logs/','GET');
       let html = `<h2 class="headline">📜 전체 로그</h2><p style="color:var(--muted)">(최근 100개 턴 기록)</p>
-        <div style="text-align:left;max-height:400px;overflow:auto;padding:10px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.03);">`;
+        <div style="text-align:left;max-height:400px;overflow:auto;padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff; color:#111827;">`;
       if(logs.length===0){ html += "<p>기록된 로그가 없습니다.</p>"; }
       else{
         logs.forEach(l=>{
-          html += `<p style="border-bottom:1px solid rgba(255,255,255,.06);padding:8px 0;margin:0;">
+          html += `<p style="border-bottom:1px solid rgba(0,0,0,.06);padding:8px 0;margin:0;">
             [${l.created_at}] <strong>${l.player_name}</strong> - ${l.score_obtained}점 (턴 ${l.turn_number}, 족보: ${l.chosen_category})
           </p>`;
         });
       }
       html += `</div><div style="margin-top:12px;"><button class="btn secondary" id="back-to-menu-btn">메인 메뉴로</button></div>`;
-      setupModalContent.classList.add('glass','fade-in');
+      setupModalContent.classList.add('glass');
       setupModalContent.innerHTML = html;
       mainMenuModal.style.display='none';
       setupModal.style.display='flex';
