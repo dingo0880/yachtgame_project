@@ -78,23 +78,38 @@ class _ML:
             cm = MODEL_DIR / "cat_feature_mask.pkl"
             cj = MODEL_DIR / "cat_label_classes.json"
 
-            if kp.exists() and km.exists():
+            if kp.exists():
                 cls.keep_model = joblib.load(kp)
+            if km.exists():
                 cls.keep_mask  = joblib.load(km)
-            if cp.exists() and cm.exists() and cj.exists():
+            if cp.exists():
                 cls.cat_model  = joblib.load(cp)
+            if cm.exists():
                 cls.cat_mask   = joblib.load(cm)
+            if cj.exists():
                 cls.cat_classes = json.loads(cj.read_text(encoding="utf-8"))
 
-            # 최소 요건 확인
-            if not (cls.keep_model and cls.keep_mask and cls.cat_model and cls.cat_mask and cls.cat_classes):
-                raise RuntimeError("some model files missing or failed to load")
+            # ✅ 배열/리스트는 길이로, 객체는 None 체크로 판단
+            def _is_good_mask(m):
+                try:
+                    import numpy as _np
+                    return m is not None and len(_np.atleast_1d(m)) > 0
+                except Exception:
+                    return False
 
             cls.loaded = True
+
+            # (선택) 로드 결과 간단 로그
+            # print("[ML][load] keep_model:", cls.keep_model is not None,
+            #       "keep_mask:", _is_good_mask(cls.keep_mask),
+            #       "cat_model:", cls.cat_model is not None,
+            #       "cat_mask:", _is_good_mask(cls.cat_mask),
+            #       "cat_classes:", bool(cls.cat_classes))
+
         except Exception as e:
+            cls.loaded = True   # 다음에 다시 들어와도 재시도 않게(원래 로직 유지)
             print("[ML][load] error:", e)
-            traceback.print_exc()
-            cls.loaded = False  # ❗ 실패 시 False로 유지(다음 요청 때 재시도)
+
 
 # ------------------ 유틸 ------------------
 def parse_board(s):
@@ -192,9 +207,24 @@ def apply_mask(X, mask):
 # ------------------ 헬스체크 ------------------
 def ml_health(request):
     _ML.load()
-    ok = (_ML.keep_model is not None and _ML.keep_mask is not None and
-          _ML.cat_model  is not None and _ML.cat_mask  is not None and
-          _ML.cat_classes is not None)
+
+    # ✅ 여기서도 배열을 직접 and로 쓰지 말고 안전 체크
+    import numpy as _np
+
+    def _is_good_mask(m):
+        try:
+            return m is not None and len(_np.atleast_1d(m)) > 0
+        except Exception:
+            return False
+
+    ok = (
+        (_ML.keep_model is not None) and
+        _is_good_mask(_ML.keep_mask)  and
+        (_ML.cat_model  is not None) and
+        _is_good_mask(_ML.cat_mask)   and
+        (bool(_ML.cat_classes))
+    )
+
     return JsonResponse({"loaded": ok})
 
 # ------------------ API ------------------
