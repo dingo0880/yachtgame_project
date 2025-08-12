@@ -1,6 +1,7 @@
 # yachtgame/urls.py
 from django.urls import path
 from . import views
+from .ml_views import ml_keep_decision, ml_category_decision, ml_health  # ✅ 추가
 
 urlpatterns = [
     path('', views.index, name='index'),
@@ -23,9 +24,9 @@ urlpatterns = [
     path('patch_notes/', views.get_patch_notes, name='get_patch_notes'),
 
     # --- ML 엔드포인트 ---
-    path('api/ml/keep', views.ml_keep_decision, name='ml_keep_decision'),
-    path('api/ml/category', views.ml_category_decision, name='ml_category_decision'),
-    path('api/ml/health', views.ml_health, name='ml_health'),
+    path('api/ml/keep', ml_keep_decision, name='ml_keep_decision'),
+    path('api/ml/category', ml_category_decision, name='ml_category_decision'),
+    path('api/ml/health', ml_health, name='ml_health'),
 
     # --- 개발자 CSV ---
     path('api/dev/export/', views.export_logs_csv, name='export_logs_csv'),
