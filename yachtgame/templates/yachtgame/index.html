@@ -118,7 +118,8 @@
 <script>
 /* -------------------- 상수/공통 -------------------- */
 const CATEGORIES = ["Ones","Twos","Threes","Fours","Fives","Sixes","Four of a Kind","Full House","Small Straight","Large Straight","Yahtzee","Chance"];
-const CPU_TYPES = ["엘리트형","도박형","공격형","안정형","일반형"];
+// ▼▼ ML형 추가
+const CPU_TYPES = ["엘리트형","도박형","공격형","안정형","일반형","ML형"];
 const gameContainer = document.getElementById('game-container');
 const mainMenuModal = document.getElementById('main-menu-modal');
 const setupModal = document.getElementById('setup-modal');
@@ -418,8 +419,17 @@ async function handleLoadGame(){
   }
 }
 
+// ▼▼ 기존 CPU 턴: ML형이면 커스텀 경로, 아니면 기존 엔드포인트 사용
 async function handlePlayCpuTurn(){
   try{
+    const gs = await apiCall('/api/get-game-state/','GET');
+    const current = gs.players[gs.current_player_index];
+    if(current && current.is_cpu && current.type === 'ML형'){
+      await handlePlayCpuTurnML(gs);
+      return;
+    }
+
+    // 기존 CPU 로직 유지
     const response = await apiCall('/api/play-cpu-turn/','POST');
     const steps = response.steps;
     const finalState = response.final_state;
@@ -441,6 +451,121 @@ async function handlePlayCpuTurn(){
     console.error('CPU 턴 진행 중 오류:', e);
     alert('CPU 턴 진행 중 오류가 발생했습니다. 게임을 새로고침합니다.');
     location.reload();
+  }
+}
+
+/* -------------------- ML형 CPU 턴 -------------------- */
+async function handlePlayCpuTurnML(gs){
+  try{
+    // 현재 상태에서 시작
+    let state = gs;
+
+    // helper: 주사위 굴림 + 애니메이션
+    const doRoll = async () => {
+      const diceArea = document.querySelector(`.game-area[style*="border: 3px solid"] .dice-area`);
+      if(diceArea) diceArea.querySelectorAll('.dice:not(.kept)').forEach(el=>el.classList.add('rolling'));
+      await sleep(500);
+      state = await apiCall('/api/roll-dice/','POST');
+      renderGame(state, true);
+      await sleep(800);
+    };
+
+    // helper: keep 적용
+    const doKeep = async (indices) => {
+      state = await apiCall('/api/keep-dice/','POST',{ kept_indices: indices });
+      renderGame(state, true);
+      await sleep(500);
+    };
+
+    // helper: 현재 턴 보드/주사위 추출
+    const currentPlayer = () => state.players[state.current_player_index];
+
+    // 1st roll
+    await doRoll();
+
+    // keep after roll 1
+    {
+      const p = currentPlayer();
+      const board = p.scoreboard;            // 그대로 전달
+      const dice = state.dice.join(',');
+      try{
+        const res = await apiCall('/api/ml/keep','POST',{
+          turn: state.current_turn, roll_idx: 1, board, dice
+        });
+        const mask = (res.keep_mask || [0,0,0,0,0]).map(v=>v?1:0);
+        const indices = mask.map((v,i)=>v?i:null).filter(v=>v!==null);
+        await doKeep(indices);
+      }catch(e){
+        console.warn('ML keep(roll1) 실패 → 기본 로직으로', e);
+      }
+    }
+
+    // 2nd roll
+    await doRoll();
+
+    // keep after roll 2 (if rolls_left > 1)
+    if(state.rolls_left > 1){
+      const p = currentPlayer();
+      const board = p.scoreboard;
+      const dice = state.dice.join(',');
+      try{
+        const res = await apiCall('/api/ml/keep','POST',{
+          turn: state.current_turn, roll_idx: 2, board, dice
+        });
+        const mask = (res.keep_mask || [0,0,0,0,0]).map(v=>v?1:0);
+        const indices = mask.map((v,i)=>v?i:null).filter(v=>v!==null);
+        await doKeep(indices);
+      }catch(e){
+        console.warn('ML keep(roll2) 실패 → 기본 로직으로', e);
+      }
+    }
+
+    // 3rd roll (if any)
+    if(state.rolls_left > 0){
+      await doRoll();
+    }
+
+    // category select
+    {
+      const p = currentPlayer();
+      const board = p.scoreboard;
+      const dice = state.dice.join(',');
+      let category = null;
+      try{
+        const res = await apiCall('/api/ml/category','POST',{
+          turn: state.current_turn, board, dice
+        });
+        category = res.category || null;
+      }catch(e){
+        console.warn('ML category 실패 → 서버 기본 CPU로 대체', e);
+      }
+
+      if(category){
+        state = await apiCall('/api/select-category/','POST',{ category });
+        renderGame(state);
+      }else{
+        // 폴백: 기존 서버 CPU 한 턴 실행해서 마무리
+        const r = await apiCall('/api/play-cpu-turn/','POST');
+        const steps = r.steps;
+        const finalState = r.final_state;
+        for(const step of steps){
+          renderGame(step, true);
+          await sleep(800);
+        }
+        renderGame(finalState);
+      }
+    }
+  }catch(err){
+    console.error('ML형 CPU 진행 오류:', err);
+    // 완전 폴백
+    const r = await apiCall('/api/play-cpu-turn/','POST');
+    const steps = r.steps;
+    const finalState = r.final_state;
+    for(const step of steps){
+      renderGame(step, true);
+      await sleep(800);
+    }
+    renderGame(finalState);
   }
 }
 
@@ -634,7 +759,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   document.getElementById('menu-dev-tools').addEventListener('click', ()=>{
     mainMenuModal.style.display = 'none';
-    openDevModal(); // 이 함수는 내가 준 dev 모달 스크립트에 포함돼있다 노
+    openDevModal();
   });
 
   document.getElementById('menu-vs-player').addEventListener('click', ()=>showSetupModal(
