@@ -8,7 +8,7 @@ from pathlib import Path
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt  # 프론트에서 CSRF 안 넣으면 임시로 사용
-
+from django.shortcuts import render
 # === 설정 ===
 CATEGORIES = [
     "Ones","Twos","Threes","Fours","Fives","Sixes",
@@ -16,7 +16,9 @@ CATEGORIES = [
 ]
 UPPER = ["Ones","Twos","Threes","Fours","Fives","Sixes"]
 MODEL_DIR = Path(settings.BASE_DIR) / "yachtgame_project" / "ml_models"
-
+def index(request):
+    # templates/yachtgame/index.html 렌더
+    return render(request, "yachtgame/index.html")
 # === 모델 로더 (lazy singleton) ===
 class _ML:
     loaded = False
