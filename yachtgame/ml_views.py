@@ -7,7 +7,44 @@ from django.conf import settings
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.dummy import DummyClassifier
+from copy import deepcopy
+import sys
+class MultiOutputWithFallback(BaseEstimator, ClassifierMixin):
+    """
+    슬롯별로:
+      - 학습 라벨이 단일 클래스면 DummyClassifier(most_frequent)
+      - 아니면 base_estimator(deepcopy) 사용
+    """
+    def __init__(self, base_estimator):
+        self.base_estimator = base_estimator
+        self.estimators_ = None
 
+    def fit(self, X, Y):
+        Y = np.asarray(Y)
+        n_targets = Y.shape[1]
+        self.estimators_ = []
+        for k in range(n_targets):
+            yk = Y[:, k]
+            uniq = np.unique(yk)
+            if len(uniq) < 2:
+                est = DummyClassifier(strategy="most_frequent")
+                est.fit(X, yk)
+            else:
+                est = deepcopy(self.base_estimator)
+                est.fit(X, yk)
+            self.estimators_.append(est)
+        return self
+
+    def predict(self, X):
+        cols = []
+        for est in self.estimators_:
+            cols.append(est.predict(X).reshape(-1, 1))
+        return np.hstack(cols)
+
+# ★ pickled 객체가 __main__.MultiOutputWithFallback 를 찾도록 패치
+sys.modules['__main__'].MultiOutputWithFallback = MultiOutputWithFallback
 CATEGORIES = [
     "Ones","Twos","Threes","Fours","Fives","Sixes",
     "Four of a Kind","Full House","Small Straight","Large Straight","Yahtzee","Chance"
