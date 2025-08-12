@@ -1,5 +1,7 @@
+# yachtgame/urls.py
 from django.urls import path
 from . import views
+from . import views_ml  # ★ 추가: ML 전용 뷰
 
 urlpatterns = [
     # --- 메인/게임 API들 ---
@@ -24,4 +26,9 @@ urlpatterns = [
 
     # ✅ 개발자용 CSV 다운로드
     path('api/dev/export/', views.export_logs_csv, name='export_logs_csv'),
+
+    # ✅ ML 엔드포인트(프론트 index가 호출하는 경로)
+    path('api/ml/keep', views_ml.ml_keep_decision, name='ml_keep_decision'),
+    path('api/ml/category', views_ml.ml_category_decision, name='ml_category_decision'),
+    path('api/ml/health', views_ml.ml_health, name='ml_health'),
 ]
