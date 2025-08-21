@@ -1,98 +1,47 @@
-{% extends "base.html" %}
-{% load static %}
-{% block title %}공지사항 - 이벤트 당첨자 발표{% endblock %}
-
-{% block content %}
-<main class="mx-auto max-w-3xl px-4 py-8">
-  <header class="mb-8">
-    <h1 class="text-3xl font-bold">공지사항</h1>
-    <p class="mt-2 text-gray-600">이벤트 당첨자 발표</p>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>공지사항 | Yacht Game</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; margin: 0; background:#f7f7f9; color:#111; }
+    header { background:#101828; color:#fff; padding:16px 20px; }
+    header a { color:#c7d2fe; text-decoration:none; margin-right:12px; }
+    main { max-width: 720px; margin: 24px auto; background:#fff; padding:24px; border-radius:12px; box-shadow:0 6px 24px rgba(16,24,40,.08); }
+    h1 { margin:0 0 12px; font-size:24px; }
+    .meta { color:#475467; font-size:14px; margin-bottom:20px; }
+    .card { border:1px solid #e5e7eb; border-radius:10px; padding:16px; margin:12px 0; }
+    .winner { font-weight:700; }
+    footer { max-width: 720px; margin: 0 auto 36px; color:#667085; font-size:13px; text-align:center; }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">홈</a>
+      <a href="/notice/">공지사항</a>
+      <a href="/patch_notes/">패치노트</a>
+    </nav>
   </header>
 
-  <!-- 알림 박스 -->
-  <section class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-    <div class="mb-4 flex items-center gap-3">
-      <div aria-hidden="true" class="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-        <span style="font-size:20px;">🎉</span>
-      </div>
-      <div>
-        <h2 class="text-xl font-semibold">축하드립니다!</h2>
-        <p class="text-sm text-gray-500">이벤트 기간 동안의 최종 결과입니다.</p>
-      </div>
+  <main>
+    <h1>이벤트 당첨자 안내</h1>
+    <div class="meta">공지 게시일: <time>2025-08-21</time></div>
+
+    <div class="card">
+      <p>이벤트 기간 동안 랭킹 1등은 <span class="winner">‘강래영#4068’</span> 님이 <strong>286점</strong>을 달성하셨습니다. 원하시는 치킨 기프티콘이 지급될 예정입니다.</p>
     </div>
 
-    <div class="space-y-6">
-      <div class="rounded-xl bg-gray-50 p-4">
-        <h3 class="mb-1 text-lg font-semibold">🏆 랭킹 1등</h3>
-        <p class="text-gray-800">
-          <strong>‘강래영#4068’</strong> 님이 <strong>286점</strong>을 달성하셨습니다.<br />
-          원하시는 <strong>치킨 기프티콘</strong>이 지급될 예정입니다.
-        </p>
-      </div>
-
-      <div class="rounded-xl bg-gray-50 p-4">
-        <h3 class="mb-1 text-lg font-semibold">🎁 참여자 추첨 당첨</h3>
-        <p class="text-gray-800">
-          참여자 중 추첨을 통해 <strong>‘ㅁ#210D’</strong> 님이 당첨되셨습니다.<br />
-          <strong>배달의민족 1만원권</strong>이 지급될 예정입니다.
-        </p>
-      </div>
-
-      <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
-        <h3 class="mb-1 text-lg font-semibold">📩 안내</h3>
-        <p class="text-gray-800">
-          위 당첨자 분들은 <strong>DM</strong>으로 연락 주시면 감사하겠습니다.
-        </p>
-      </div>
+    <div class="card">
+      <p>또한 참여자 중 추첨을 통해 <span class="winner">‘ㅁ#210D’</span> 님이 당첨되셨습니다. <strong>배달의민족 1만원권</strong>이 지급될 예정입니다.</p>
     </div>
 
-    <footer class="mt-6 border-t pt-4 text-sm text-gray-500">
-      ※ 본 공지는 서비스 운영을 위해 게시되었으며, 경품 수령을 위한 신원 확인이 필요할 수 있습니다.
-    </footer>
-  </section>
-</main>
+    <div class="card">
+      <p>위 당첨자 분들은 확인을 위해 <strong>DM</strong> 주시면 감사하겠습니다.</p>
+    </div>
+  </main>
 
-<!-- 최소 스타일(프로젝트에 Tailwind가 없다면 기본 가독성 보강) -->
-<style>
-  /* Tailwind를 쓰지 않는 환경을 대비한 기본 스타일 */
-  :root { --fg:#111827; --muted:#6b7280; --bg:#ffffff; --border:#e5e7eb; }
-  .text-gray-600{color:var(--muted)}
-  .text-gray-500{color:var(--muted)}
-  .text-gray-800{color:var(--fg)}
-  .bg-white{background:#fff}
-  .bg-gray-50{background:#f9fafb}
-  .bg-indigo-50{background:#eef2ff}
-  .bg-indigo-100{background:#e0e7ff}
-  .border{border:1px solid var(--border)}
-  .border-gray-200{border-color:#e5e7eb}
-  .border-indigo-100{border-color:#e0e7ff}
-  .rounded-2xl{border-radius:1rem}
-  .rounded-xl{border-radius:.75rem}
-  .shadow-sm{box-shadow:0 1px 2px rgba(0,0,0,0.05)}
-  .mx-auto{margin-left:auto;margin-right:auto}
-  .max-w-3xl{max-width:48rem}
-  .px-4{padding-left:1rem;padding-right:1rem}
-  .py-8{padding-top:2rem;padding-bottom:2rem}
-  .mb-8{margin-bottom:2rem}
-  .mb-1{margin-bottom:.25rem}
-  .mt-2{margin-top:.5rem}
-  .mt-6{margin-top:1.5rem}
-  .p-6{padding:1.5rem}
-  .p-4{padding:1rem}
-  .pt-4{padding-top:1rem}
-  .space-y-6 > * + * {margin-top:1.5rem}
-  .text-3xl{font-size:1.875rem;line-height:2.25rem}
-  .text-xl{font-size:1.25rem;line-height:1.75rem}
-  .text-lg{font-size:1.125rem;line-height:1.75rem}
-  .font-bold{font-weight:700}
-  .font-semibold{font-weight:600}
-  .flex{display:flex}
-  .items-center{align-items:center}
-  .gap-3{gap:.75rem}
-  .h-10{height:2.5rem}
-  .w-10{width:2.5rem}
-  .rounded-full{border-radius:9999px}
-  .justify-center{justify-content:center}
-  .border-t{border-top:1px solid var(--border)}
-</style>
-{% endblock %}
+  <footer>© 2025 Yacht Game</footer>
+</body>
+</html>
