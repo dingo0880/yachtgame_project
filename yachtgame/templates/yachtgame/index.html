@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Yacht (Yahtzee) – Coral Light</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://www.google.com/recaptcha/api.js?render=6Le9yqArAAAAAJiYF7VyQgPrEwyu1ax5OwNe4fNq"></script>
+
+  <style>
+    :root{
+      /* ---- 밝은 코랄 테마 ---- */
+      --bg: #fff8f6;
+      --panel: rgba(255,255,255,0.85);
+      --panel-strong: rgba(255,255,255,0.95);
+      --border: rgba(0,0,0,0.08);
+      --text: #15202b;
+      --muted: #586174;
+      --accent: #ff7a70;    /* 코랄 */
+      --accent-2: #ffb3a9;  /* 연코랄 */
+      --success: #16a34a;
+      --danger: #e11d48;
+      --yellow: #f59e0b;
+      --shadow: 0 10px 22px rgba(24,24,24,.08);
+      --radius: 16px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;color:var(--text);
+      font-family:Inter, "Noto Sans KR", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background:
+        radial-gradient(900px 600px at -10% -10%, #ffe8e4 0%, transparent 60%),
+        radial-gradient(900px 600px at 110% 0%, #ffeceb 0%, transparent 55%),
+        linear-gradient(180deg, #fff8f6 0%, #fffdfc 100%);
+      overflow-y:auto;
+    }
+
+    /* ---------- 공통 UI ---------- */
+    .container{
+      max-width:1200px;margin:0 auto;padding:28px;
+      display:flex;gap:20px;justify-content:center;align-items:flex-start;flex-wrap:nowrap;
+    }
+
+    .glass{
+      background:var(--panel);
+      backdrop-filter: blur(10px) saturate(120%);
+      -webkit-backdrop-filter: blur(10px) saturate(120%);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .btn{
+      appearance:none;border:0;cursor:pointer;
+      padding:12px 16px;border-radius:12px;
+      color:#fff;font-weight:700;letter-spacing:.2px;
+      transition: transform .12s ease, box-shadow .15s ease, background .15s ease, opacity .15s ease;
+      background: linear-gradient(135deg, var(--accent) 0%, #ff6b6b 100%);
+      box-shadow: 0 6px 16px rgba(255,122,112,.28);
+    }
+    .btn:hover{ transform: translateY(-1px) }
+    .btn:active{ transform: translateY(0) scale(.98) }
+    .btn.secondary{
+      background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+      color:#0f172a;
+      box-shadow: 0 6px 14px rgba(148,163,184,.25);
+      border:1px solid var(--border);
+    }
+    .btn.ghost{
+      background:#ffffff; border:1px solid var(--border); color:var(--text);
+      box-shadow:none;
+    }
+    .btn:disabled{ opacity:.6; cursor:not-allowed; transform:none; box-shadow:none; }
+
+    .headline{
+      display:flex;align-items:center;gap:10px;margin:0 0 14px 0;
+      font-weight:800; letter-spacing:.2px;
+      background: linear-gradient(90deg, #ff6b6b, #ff9d8f);
+      -webkit-background-clip:text; background-clip:text; color: transparent;
+    }
+
+    /* ---------- 모달 ---------- */
+    .modal-overlay{
+      position: fixed; inset:0; display:flex; justify-content:center; align-items:center;
+      background: rgba(255, 244, 241, .75);
+      z-index:1000;
+      transition: opacity .18s ease;
+    }
+    .modal-content{
+      width:min(560px, calc(100vw - 40px));
+      padding:22px 20px 18px;
+    }
+    .modal-content h2{ margin:0 0 14px 0; font-size:22px }
+    .modal-grid{
+      display:grid; gap:10px; margin-top:8px;
+      grid-template-columns: 1fr 1fr;
+    }
+    .modal-content .input-group{
+      text-align:left;display:flex;flex-direction:column;gap:8px;margin-top:12px;
+    }
+    .modal-content input, .modal-content select{
+      width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border);
+      background:#fff; color:var(--text); outline:none;
+    }
+
+    /* ---------- 게임 패널 ---------- */
+    .game-area{
+      flex:0 0 460px; padding:20px; position:relative;
+    }
+    .game-area h2{ margin:0 0 8px 0; font-size:18px; font-weight:800; color:#0f172a }
+    .game-area .badge{
+      display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px;
+      background: rgba(255,107,107,.12); border:1px solid rgba(255,107,107,.35); color:#b4231f;
+    }
+    .is-current{ outline: 2px solid rgba(255,107,107,.35); box-shadow: 0 0 0 6px rgba(255,107,107,.12) inset; }
+
+    .dice-area{
+      margin:14px 0 14px 0; height:86px; display:flex; justify-content:center; gap:12px;
+      width:100%;
+    }
+    .dice{
+      width:64px; height:64px; border-radius:14px;
+      display:grid; place-items:center; font-size:30px; user-select:none; cursor:pointer;
+      color:#1f2937; border:1px solid rgba(0,0,0,.08);
+      background:
+        radial-gradient(180% 120% at 100% 0%, rgba(255,255,255,.85) 0%, rgba(255,255,255,.7) 45%, rgba(255,255,255,0.6) 100%),
+        #ffffff;
+      transition: transform .1s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .dice:hover{ transform: translateY(-2px); box-shadow:0 8px 16px rgba(0,0,0,.08); }
+    .dice.kept{
+      background: linear-gradient(135deg, #ffd2c9 0%, #ffc0b5 100%);
+      color:#0f172a; border-color:rgba(0,0,0,.1);
+      transform: translateY(-3px);
+      box-shadow: 0 10px 20px rgba(255, 148, 133, .25);
+    }
+    @keyframes roll {
+      0%{ transform: rotate(0) scale(1) }
+      35%{ transform: rotate(25deg) scale(.9) }
+      70%{ transform: rotate(-18deg) scale(1.05) }
+      100%{ transform: rotate(0) scale(1) }
+    }
+    .dice.rolling{ animation: roll .45s ease-in-out }
+
+    .controls{ display:flex; align-items:center; gap:12px; margin:6px 0 12px }
+    .controls small{ color:var(--muted) }
+
+    /* ---------- 로그 ---------- */
+    .log-container{
+      flex:1 1 320px; padding:18px; min-height:420px;
+    }
+    .log-container h3{ margin:0 0 10px 0; font-size:16px; font-weight:800; color:#0f172a }
+    #game-log{
+      margin-top:8px; border-radius:12px; border:1px solid var(--border);
+      background: #ffffff; padding:12px; height:400px; overflow:auto;
+      font-size:13px; line-height:1.5; color:#111827;
+    }
+    #game-log p{ margin:0 0 6px 0; }
+
+    /* ---------- 스코어보드 ---------- */
+    .scoreboard{
+      width:100%; border-collapse:separate; border-spacing:0; overflow:hidden;
+      border-radius:12px; border:1px solid var(--border); background:#fff;
+    }
+    .scoreboard thead th{
+      text-align:left; padding:12px 14px;
+      background: linear-gradient(180deg, rgba(255,122,112,.15), rgba(255,122,112,.06));
+      color:#7a1e18; font-weight:800; letter-spacing:.2px;
+    }
+    .scoreboard tbody tr{ transition: background .12s ease, color .12s ease; }
+    .scoreboard td{
+      padding:10px 14px; border-top:1px solid rgba(0,0,0,.06); color:#0f172a;
+    }
+    .score-category{ cursor:pointer }
+    .score-category:hover:not(.filled){ background: rgba(255,122,112,.08) }
+    .score-category.filled{ color:#64748b; background: #f8fafc; cursor:not-allowed }
+    .score-category td:last-child{ text-align:right; font-weight:700 }
+    .score-summary td{ font-weight:800; background:#fdf2f2 }
+
+    .preview-score{ color:#14803a; font-style:italic }
+
+    /* ---------- DEV 모달 ---------- */
+    #dev-modal .modal-content{ width:min(680px, calc(100vw - 40px)); }
+
+    /* ---------- 반응형 ---------- */
+    @media (max-width:1100px){
+      .container{ flex-wrap:wrap; padding:18px }
+      .game-area{ flex:1 1 100% }
+      .log-container{ flex:1 1 100%; order: 999 }
+    }
+
+    /* enter fade: 첫 렌더만 사용 */
+    .fade-in{ animation: fade .22s ease }
+    @keyframes fade{ from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:translateY(0)} }
+  </style>
+</head>
+<body>
+
+  <div id="game-container" class="container" style="display:none;"></div>
+
+  <!-- 메인 메뉴 -->
+  <div id="main-menu-modal" class="modal-overlay">
+    <div class="modal-content glass fade-in">
+      <h2 class="headline">🎲 요트(Yacht) — Coral Light</h2>
+
+      <div class="modal-grid">
+        <button id="menu-vs-cpu" class="btn">1. CPU와 대결</button>
+        <button id="menu-vs-player" class="btn">2. 플레이어끼리</button>
+        <button id="menu-cpu-vs-cpu" class="btn">3. CPU vs CPU</button>
+        <button id="menu-analyze-cpu" class="btn">4. CPU 분석</button>
+
+        <button id="menu-load-game" class="btn secondary">5. 이어서하기</button>
+        <button id="menu-game-rules" class="btn secondary">6. 게임 규칙</button>
+        <button id="menu-notice" class="btn secondary">7. 공지사항</button>
+        <button id="menu-patch-notes" class="btn secondary">8. 패치노트</button>
+
+        <button id="menu-hall-of-fame" class="btn ghost">🏆 오늘의 랭킹</button>
+        <button id="menu-weekly-hall-of-fame" class="btn ghost">🏆 주간 랭킹</button>
+        <button id="menu-view-all-logs" class="btn ghost">📜 전체 로그</button>
+        <button id="menu-dev-tools" class="btn ghost">🔧 개발자 메뉴</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 셋업/서브 모달 -->
+  <div id="setup-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content glass" id="setup-modal-content"></div>
+  </div>
+
+  <!-- 이벤트 모달 -->
+  <div id="event-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content glass">
+      <h2 class="headline">🎉 이벤트 참여</h2>
+      <p id="event-modal-score" style="font-weight:700; margin:.5rem 0 1rem 0;"></p>
+      <p style="color:var(--muted); margin-top:-6px;">경품 추첨 이벤트에 참여하시겠어요?</p>
+
+      <div class="input-group">
+        <label>닉네임</label>
+        <input type="text" id="event-player-name" placeholder="닉네임" readonly>
+      </div>
+      <div class="input-group">
+        <label>전화번호</label>
+        <input type="tel" id="event-phone-number" placeholder="예: 010-1234-5678">
+      </div>
+      <p style="font-size:12px;color:var(--muted)">개인정보(전화번호)는 암호화되어 저장되며 경품 발송 목적으로만 사용됩니다.</p>
+
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button id="submit-event-btn" class="btn" style="flex:1;">참여하기</button>
+        <button id="cancel-event-btn" class="btn secondary" style="flex:1;">다음에 할게요</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 개발자 모달 -->
+  <div id="dev-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content glass">
+      <h2 class="headline">🔧 개발자용 CSV 다운로드</h2>
+
+      <div class="input-group">
+        <label>비밀번호</label>
+        <input id="dev-pass" type="password" placeholder="비밀번호 입력 (필수)"/>
+      </div>
+
+      <div class="input-group" style="display:flex; gap:12px; align-items:end;">
+        <div style="flex:1">
+          <label>시작일</label>
+          <input id="dev-start" type="date"/>
+        </div>
+        <div style="flex:1">
+          <label>종료일</label>
+          <input id="dev-end" type="date"/>
+        </div>
+        <div style="font-size:.9em;color:var(--muted)">(비우면 전체)</div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:6px;">
+        <button id="btn-export-events" class="btn" style="flex:1;">1) 이벤트 로그</button>
+        <button id="btn-export-turns" class="btn" style="flex:1;">2) 턴 로그</button>
+        <button id="btn-dev-close" class="btn secondary">닫기</button>
+      </div>
+
+      <div id="dev-msg" style="margin-top:10px;color:#334155;"></div>
+    </div>
+  </div>
+
+  <!-- ===================== JS ===================== -->
+  <script>
+  /* -------------------- 상수/공통 -------------------- */
+  const CATEGORIES = ["Ones","Twos","Threes","Fours","Fives","Sixes","Four of a Kind","Full House","Small Straight","Large Straight","Yahtzee","Chance"];
+  const CPU_TYPES = ["엘리트형","도박형","공격형","안정형","일반형","ML형"];
+  const gameContainer = document.getElementById('game-container');
+  const mainMenuModal = document.getElementById('main-menu-modal');
+  const setupModal = document.getElementById('setup-modal');
+  const setupModalContent = document.getElementById('setup-modal-content');
+  const eventModal = document.getElementById('event-modal');
+  const RECAPTCHA_SITE_KEY = '6Le9yqArAAAAAJiYF7VyQgPrEwyu1ax5OwNe4fNq';
+
+  const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
+  function getCookie(name){
+    let cookieValue=null;
+    if(document.cookie && document.cookie !== ''){
+      for(const cookie of document.cookie.split(';')){
+        const [key,value]=cookie.trim().split('=');
+        if(key===name){ cookieValue=decodeURIComponent(value); break; }
+      }
+    }
+    return cookieValue;
+  }
+  const csrftoken = getCookie('csrftoken');
+  const deepCopy = (obj) => (typeof structuredClone === 'function' ? structuredClone(obj) : JSON.parse(JSON.stringify(obj)));
+
+  /* ---- 깜빡임 억제용 플래그 ---- */
+  let FIRST_RENDER = true;
+
+  /* -------------------- 라우팅/페이지 -------------------- */
+  function showGameRulesModal(){
+    const rulesHTML = `
+      <h2 class="headline">📘 요트(Yacht) 규칙</h2>
+      <div style="text-align:left; line-height:1.7; max-height:60vh; overflow:auto; color:#111827;">
+        <h3 style="margin:10px 0 6px 0;">기본</h3>
+        <ul>
+          <li>총 12라운드, 각 라운드에서 주사위 5개를 최대 3번 굴립니다.</li>
+          <li>중간에 원하는 주사위를 <b>고정(Keep)</b>할 수 있습니다.</li>
+          <li>3번째 굴림 후 <b>하나의 카테고리</b>에 점수를 기록합니다(재사용 불가).</li>
+        </ul>
+        <h3 style="margin:14px 0 6px 0;">카테고리 & 점수</h3>
+        <ul>
+          <li><b>Ones ~ Sixes</b>: 해당 눈의 합</li>
+          <li><b>Four of a Kind</b>: 같은 눈 4개 이상이면 합, 아니면 0</li>
+          <li><b>Full House</b>: 3+2 조합이면 25점</li>
+          <li><b>Small Straight</b>: 4연속이면 15점</li>
+          <li><b>Large Straight</b>: 5연속이면 30점</li>
+          <li><b>Yahtzee</b>: 같은 눈 5개면 50점</li>
+          <li><b>Chance</b>: 주사위 합</li>
+        </ul>
+        <h3 style="margin:14px 0 6px 0;">보너스</h3>
+        <ul><li>상단 합계 ≥ 63점이면 +35점</li></ul>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <button class="btn secondary" id="close-rules-btn">닫기</button>
+      </div>`;
+    setupModalContent.classList.add('glass');
+    setupModalContent.innerHTML = rulesHTML;
+    mainMenuModal.style.display='none';
+    setupModal.style.display='flex';
+    document.getElementById('close-rules-btn').addEventListener('click',()=>{
+      setupModal.style.display='none';
+      mainMenuModal.style.display='flex';
+    });
+  }
+  function showNoticeModal(){ window.location.href='/notice/'; }
+  function showPatchNotesModal(){ window.location.href='/patch_notes/'; }
+
+  /* -------------------- 점수 계산(클라이언트 미리보기) -------------------- */
+  function scoreCategory(dice, category){
+    const counts = dice.reduce((acc,v)=>({ ...acc, [v]:(acc[v]||0)+1 }),{});
+    const diceSet = new Set(dice);
+    const values = Object.values(counts);
+    const sum = dice.reduce((a,b)=>a+b,0);
+    switch(category){
+      case "Ones": return (counts[1]||0)*1;
+      case "Twos": return (counts[2]||0)*2;
+      case "Threes": return (counts[3]||0)*3;
+      case "Fours": return (counts[4]||0)*4;
+      case "Fives": return (counts[5]||0)*5;
+      case "Sixes": return (counts[6]||0)*6;
+      case "Four of a Kind": return Math.max(...values,0)>=4 ? sum : 0;
+      case "Full House": return values.sort().join(',')==='2,3' ? 25 : 0;
+      case "Small Straight":{
+        const uniq = Array.from(diceSet).sort((a,b)=>a-b).join('');
+        return /1234|2345|3456/.test(uniq) ? 15 : 0;
+      }
+      case "Large Straight":{
+        const uniq = Array.from(diceSet).sort((a,b)=>a-b);
+        return (uniq.length===5 && (uniq[4]-uniq[0]===4)) ? 30 : 0;
+      }
+      case "Yahtzee": return values.includes(5) ? 50 : 0;
+      case "Chance": return sum;
+      default: return 0;
+    }
+  }
+
+  /* -------------------- 공통 fetch 래퍼 -------------------- */
+  async function apiCall(endpoint, method='POST', body=null){
+    const headers = { 'Content-Type':'application/json', 'X-CSRFToken': csrftoken };
+    try{
+      const response = await fetch(endpoint,{
+        method, headers, credentials:'same-origin',
+        body: body ? JSON.stringify(body) : null
+      });
+      if(!response.ok){
+        const text = await response.text();
+        throw new Error(`서버 오류: ${response.status} (${response.statusText})\n응답:\n${text.substring(0,200)}...`);
+      }
+      return response.status===204 ? null : await response.json();
+    }catch(err){
+      console.error(`API 호출 오류 (${endpoint}):`, err);
+      alert(err.message);
+      throw err;
+    }
+  }
+
+  /* -------------------- 렌더링 -------------------- */
+  function renderGame(gameState, isCpuAnimationStep=false){
+    if(!gameState){
+      gameContainer.style.display='none';
+      mainMenuModal.style.display='flex';
+      return;
+    }
+    if(gameState.is_over){
+      renderEndGame(gameState);
+      return;
+    }
+    mainMenuModal.style.display='none';
+    gameContainer.style.display='flex';
+
+    // 전체 리렌더는 유지하되, 페이드인/글래스만 두고 'fade-in'은 첫 렌더 때만
+    gameContainer.innerHTML='';
+
+    gameState.players.forEach((player, idx)=>{
+      const node = createPlayerUI(player, idx, gameState, FIRST_RENDER);
+      gameContainer.appendChild(node);
+    });
+
+    const logContainer = document.createElement('div');
+    logContainer.className='log-container glass' + (FIRST_RENDER ? ' fade-in' : '');
+    logContainer.innerHTML = `<h3>게임 로그</h3><div id="game-log"></div>`;
+    gameContainer.appendChild(logContainer);
+
+    const gameLogEl = document.getElementById('game-log');
+    gameState.log.forEach(msg=>{
+      const p=document.createElement('p'); p.textContent=msg; gameLogEl.appendChild(p);
+    });
+    gameLogEl.scrollTop = gameLogEl.scrollHeight;
+
+    if(!isCpuAnimationStep){
+      const current = gameState.players[gameState.current_player_index];
+      if(current.is_cpu){ setTimeout(handlePlayCpuTurn, 1200); }
+    }
+
+    // 첫 렌더 완료 후엔 애니 끔
+    if (FIRST_RENDER) FIRST_RENDER = false;
+  }
+
+  function createPlayerUI(player, index, gameState, useFade){
+    const el = document.createElement('div');
+    el.className='game-area glass' + (useFade ? ' fade-in' : '');
+    const isCurrent = index===gameState.current_player_index;
+    if(isCurrent) el.classList.add('is-current');
+
+    const upperScore = CATEGORIES.slice(0,6).reduce((s,c)=>s+(player.scoreboard[c]??0),0);
+    const bonus = upperScore>=63 ? 35 : 0;
+    const totalScore = Object.values(player.scoreboard).filter(v=>v!==null).reduce((s,v)=>s+v,0)+bonus;
+
+    const rows = CATEGORIES.map(cat=>`
+      <tr class="score-category ${player.scoreboard[cat]!==null ? 'filled':''}" data-category="${cat}">
+        <td>${cat}</td><td class="score-value">${player.scoreboard[cat] ?? '-'}</td>
+      </tr>`).join('');
+
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2>${player.display_name}</h2>
+        ${isCurrent ? '<span class="badge">현재 차례</span>' : ''}
+      </div>
+
+      <div id="turn-info-${index}" style="color:var(--muted); margin-bottom:6px"></div>
+
+      <div id="dice-area-${index}" class="dice-area"></div>
+
+      <div class="controls">
+        <button id="roll-btn-${index}" class="btn">주사위 굴리기</button>
+        <small id="rolls-left-info-${index}"></small>
+      </div>
+
+      <div class="scoreboard-container">
+        <table class="scoreboard">
+          <thead><tr><th colspan="2">점수판</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr class="score-summary"><td>상단 합계</td><td>${upperScore} / 63</td></tr>
+            <tr class="score-summary"><td>보너스</td><td>+${bonus}</td></tr>
+            <tr class="score-summary"><td>총합</td><td>${totalScore}</td></tr>
+          </tfoot>
+        </table>
+      </div>`;
+
+    const rollBtn = el.querySelector(`#roll-btn-${index}`);
+    rollBtn.disabled = true;
+
+    if(isCurrent){
+      el.querySelector(`#turn-info-${index}`).textContent =
+        `라운드 ${gameState.current_turn} · ${player.is_cpu ? 'CPU의 차례' : '당신의 차례'}`;
+
+      const diceArea = el.querySelector(`#dice-area-${index}`);
+      gameState.dice.forEach((v,i)=>{
+        const d = document.createElement('div');
+        d.className = `dice ${gameState.kept_indices.includes(i) ? 'kept':''}`;
+        d.textContent = v===0 ? '' : ['⚀','⚁','⚂','⚃','⚄','⚅'][v-1];
+        d.dataset.index = i;
+        if(!player.is_cpu) d.addEventListener('click', handleKeepDice);
+        diceArea.appendChild(d);
+      });
+
+      rollBtn.disabled = player.is_cpu || gameState.rolls_left===0;
+      rollBtn.addEventListener('click', handleRollDice);
+      el.querySelector(`#rolls-left-info-${index}`).textContent = `(남은 굴림: ${gameState.rolls_left})`;
+
+      if(gameState.rolls_left<3){ previewScores(el, gameState.dice); }
+
+      if(!player.is_cpu){
+        el.querySelectorAll('.score-category:not(.filled)').forEach(row=>{
+          row.addEventListener('click', ()=>handleSelectCategory(row.dataset.category));
+        });
+      }
+    }
+    return el;
+  }
+
+  function previewScores(playerArea, dice){
+    playerArea.querySelectorAll('.score-category:not(.filled)').forEach(row=>{
+      const cat = row.dataset.category;
+      const val = scoreCategory(dice, cat);
+      const cell = row.querySelector('.score-value');
+      cell.textContent = val;
+      cell.classList.add('preview-score');
+    });
+  }
+
+  function renderEndGame(gameState){
+    const final = gameState.players.map(p=>{
+      const up = CATEGORIES.slice(0,6).reduce((s,c)=>s+(p.scoreboard[c]||0),0);
+      const bonus = up>=63 ? 35 : 0;
+      return { name:p.display_name, score: Object.values(p.scoreboard).filter(v=>v!==null).reduce((s,v)=>s+v,0)+bonus, is_cpu:p.is_cpu };
+    }).sort((a,b)=>b.score-a.score);
+
+    let html = `<h2 class="headline">🏆 최종 결과</h2>`;
+    final.forEach((r,i)=>{ html += `<p style="margin:.2rem 0;color:#111827">${i+1}위: <b>${r.name}</b> - ${r.score}점</p>`; });
+    if(final.length>1) html += `<p style="margin-top:.6rem;color:#111827"><strong>🎉 최종 우승자: ${final[0].name}</strong></p>`;
+    html += `<div style="margin-top:12px"><button id="play-again-btn" class="btn">메인 메뉴로</button></div>`;
+    setupModalContent.classList.add('glass');
+    setupModalContent.innerHTML = html;
+    setupModal.style.display='flex';
+    document.getElementById('play-again-btn').addEventListener('click', ()=>location.reload());
+
+    const winner = final[0];
+    const human = gameState.players.find(p=>!p.is_cpu);
+    if(human && !winner.is_cpu && winner.name===human.display_name){
+      showEventParticipationModal(human, gameState.game_id, winner.score);
+    }
+  }
+
+  /* -------------------- 핸들러 -------------------- */
+  async function handleStartGame(players){
+    try{
+      setupModal.style.display='none';
+      const gameState = await apiCall('/api/start-game/','POST',{ players });
+      const current = gameState.players[gameState.current_player_index];
+      if(!current.is_cpu){
+        gameState.turn_buf.score_state_before = deepCopy(current.scoreboard);
+      }
+      FIRST_RENDER = true; // 새 게임 시작 시 첫 렌더만 페이드
+      renderGame(gameState);
+    }catch(e){}
+  }
+
+  async function handleRollDice(){
+    try{
+      const rollBtn = document.querySelector(`button[id^="roll-btn-"]:not(:disabled)`);
+      if(rollBtn) rollBtn.disabled = true;
+      const diceArea = document.querySelector(`.game-area.is-current .dice-area`);
+      if(diceArea) diceArea.querySelectorAll('.dice:not(.kept)').forEach(el=>el.classList.add('rolling'));
+      await sleep(450);
+      renderGame(await apiCall('/api/roll-dice/','POST'));
+    }catch(e){}
+  }
+
+  async function handleKeepDice(e){
+    const dieIndex = parseInt(e.currentTarget.dataset.index,10);
+    const diceArea = e.currentTarget.closest('.dice-area');
+    const keptEls = diceArea.querySelectorAll('.dice.kept');
+    let kept = Array.from(keptEls).map(el=>parseInt(el.dataset.index,10));
+    if(kept.includes(dieIndex)) kept = kept.filter(i=>i!==dieIndex);
+    else kept.push(dieIndex);
+    try{
+      renderGame(await apiCall('/api/keep-dice/','POST',{ kept_indices: kept }));
+    }catch(e){}
+  }
+
+  async function handleSelectCategory(category){
+    try{
+      const gameState = await apiCall('/api/select-category/','POST',{ category });
+      const nextPlayer = gameState.players[gameState.current_player_index];
+      if(!nextPlayer.is_cpu){
+        gameState.turn_buf.score_state_before = deepCopy(nextPlayer.scoreboard);
+      }
+      renderGame(gameState);
+    }catch(e){}
+  }
+
+  async function handleLoadGame(){
+    try{
+      FIRST_RENDER = true;
+      renderGame(await apiCall('/api/get-game-state/','GET'));
+    }catch(e){
+      if((e.message||'').includes('404')) alert('저장된 게임이 없습니다.');
+    }
+  }
+
+  // ▼▼ ML형: 원본 로직 유지
+  async function handlePlayCpuTurn(){
+    try{
+      const gs = await apiCall('/api/get-game-state/','GET');
+      const current = gs.players[gs.current_player_index];
+      if(current && current.is_cpu && current.type === 'ML형'){
+        await handlePlayCpuTurnML(gs);
+        return;
+      }
+
+      const response = await apiCall('/api/play-cpu-turn/','POST');
+      const steps = response.steps;
+      const finalState = response.final_state;
+      for(const step of steps){
+        renderGame(step, true);
+        const last = step.log[step.log.length-1] || '';
+        if(last.includes('굴림 결과')){
+          const diceArea = document.querySelector(`.game-area.is-current .dice-area`);
+          if(diceArea){
+            diceArea.querySelectorAll('.dice:not(.kept)').forEach(el=>{
+              el.classList.remove('rolling'); void el.offsetWidth; el.classList.add('rolling');
+            });
+          }
+        }
+        await sleep(1000);
+      }
+      renderGame(finalState);
+    }catch(e){
+      console.error('CPU 턴 진행 중 오류:', e);
+      alert('CPU 턴 진행 중 오류가 발생했습니다. 게임을 새로고침합니다.');
+      location.reload();
+    }
+  }
+
+  async function handlePlayCpuTurnML(gs){
+    try{
+      let state = gs;
+      const doRoll = async () => {
+        const diceArea = document.querySelector(`.game-area.is-current .dice-area`);
+        if(diceArea) diceArea.querySelectorAll('.dice:not(.kept)').forEach(el=>el.classList.add('rolling'));
+        await sleep(450);
+        state = await apiCall('/api/roll-dice/','POST');
+        renderGame(state, true);
+        await sleep(720);
+      };
+      const doKeep = async (indices) => {
+        state = await apiCall('/api/keep-dice/','POST',{ kept_indices: indices });
+        renderGame(state, true);
+        await sleep(400);
+      };
+      const currentPlayer = () => state.players[state.current_player_index];
+
+      await doRoll();
+      {
+        const p = currentPlayer();
+        const board = p.scoreboard;
+        const dice = state.dice.join(',');
+        try{
+          const res = await apiCall('/api/ml/keep','POST',{ turn: state.current_turn, roll_idx: 1, board, dice });
+          const mask = (res.keep_mask || [0,0,0,0,0]).map(v=>v?1:0);
+          const indices = mask.map((v,i)=>v?i:null).filter(v=>v!==null);
+          await doKeep(indices);
+        }catch(e){ console.warn('ML keep(roll1) 실패 → 기본 로직', e); }
+      }
+
+      await doRoll();
+      if(state.rolls_left > 1){
+        const p = currentPlayer();
+        const board = p.scoreboard;
+        const dice = state.dice.join(',');
+        try{
+          const res = await apiCall('/api/ml/keep','POST',{ turn: state.current_turn, roll_idx: 2, board, dice });
+          const mask = (res.keep_mask || [0,0,0,0,0]).map(v=>v?1:0);
+          const indices = mask.map((v,i)=>v?i:null).filter(v=>v!==null);
+          await doKeep(indices);
+        }catch(e){ console.warn('ML keep(roll2) 실패 → 기본 로직', e); }
+      }
+
+      if(state.rolls_left > 0){ await doRoll(); }
+
+      {
+        const p = currentPlayer();
+        const board = p.scoreboard;
+        const dice = state.dice.join(',');
+        let category = null;
+        try{
+          const res = await apiCall('/api/ml/category','POST',{ turn: state.current_turn, board, dice });
+          category = res.category || null;
+        }catch(e){ console.warn('ML category 실패 → 서버 CPU', e); }
+
+        if(category){
+          state = await apiCall('/api/cpu/select-category/','POST',{ category });
+          renderGame(state);
+        }else{
+          const r = await apiCall('/api/play-cpu-turn/','POST');
+          const steps = r.steps;
+          const finalState = r.final_state;
+          for(const step of steps){ renderGame(step, true); await sleep(720); }
+          renderGame(finalState);
+        }
+      }
+    }catch(err){
+      console.error('ML형 CPU 진행 오류:', err);
+      const r = await apiCall('/api/play-cpu-turn/','POST');
+      const steps = r.steps;
+      const finalState = r.final_state;
+      for(const step of steps){ renderGame(step, true); await sleep(720); }
+      renderGame(finalState);
+    }
+  }
+
+  /* -------------------- 이벤트/랭킹/로그 -------------------- */
+  function showSetupModal(title, inputs, onStart){
+    setupModal.style.display='flex';
+    const inputHTML = inputs.map(i=>`<div class="input-group">${i}</div>`).join('');
+    setupModalContent.classList.add('glass'); // 재오픈시 fade-in 제거
+    setupModalContent.innerHTML = `
+      <h2 class="headline">${title}</h2>
+      ${inputHTML}
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button id="start-game-btn" class="btn" style="flex:1;">게임 시작</button>
+        <button class="btn secondary" id="back-to-menu-btn" style="flex:1;">메인 메뉴로</button>
+      </div>`;
+    document.getElementById('start-game-btn').addEventListener('click', onStart);
+    document.getElementById('back-to-menu-btn').addEventListener('click', ()=>location.reload());
+  }
+
+  function showEventParticipationModal(player, gameId, score){
+    eventModal.style.display='flex';
+    document.getElementById('event-modal-score').textContent = `최종 점수: ${score}점`;
+    document.getElementById('event-player-name').value = player.display_name;
+    document.getElementById('submit-event-btn').onclick = ()=>{
+      const phoneInput = document.getElementById('event-phone-number');
+      const phoneNumber = phoneInput.value;
+      if(!phoneNumber){ alert('전화번호를 입력해주세요.'); return; }
+      grecaptcha.ready(function(){
+        grecaptcha.execute(RECAPTCHA_SITE_KEY,{action:'submit'}).then(async function(token){
+          try{
+            const res = await apiCall('/api/save-event-entry/','POST',{
+              game_id: gameId, player_name: player.display_name, phone_number: phoneNumber, recaptcha_token: token
+            });
+            alert(res.message);
+            eventModal.style.display='none';
+          }catch(e){ alert(e.message); }
+        });
+      });
+    };
+    document.getElementById('cancel-event-btn').onclick = ()=>{ eventModal.style.display='none'; };
+
+    const phone = document.getElementById('event-phone-number');
+    phone.addEventListener('input', function(ev){
+      let v = ev.target.value.replace(/[^0-9]/g,''); let out='';
+      if(v.length<4){ out=v; }
+      else if(v.length<8){ out = `${v.substr(0,3)}-${v.substr(3)}`; }
+      else if(v.length<12){ out = `${v.substr(0,3)}-${v.substr(3,4)}-${v.substr(7)}`; }
+      else{ out = `${v.substr(0,3)}-${v.substr(3,4)}-${v.substr(7,4)}`; }
+      ev.target.value = out;
+    });
+  }
+
+  async function handleAnalyzeCpu(){
+    const cpuType = document.getElementById('analyze-cpu-type').value;
+    const count = document.getElementById('analyze-count').value;
+    setupModalContent.innerHTML = `<h2 class="headline">🤖 ${cpuType} 분석 중... ⏳</h2><p style="color:var(--muted)">잠시만 기다려주세요...</p>`;
+    try{
+      const r = await apiCall('/api/analyze-cpu/','POST',{ cpu_type: cpuType, count: parseInt(count) });
+      let html = `<h2 class="headline">✅ ${cpuType} 분석 완료!</h2>
+        <p style="color:var(--muted)">총 ${r.count} 게임 시뮬레이션 결과</p>
+        <div style="text-align:left; margin-top:14px; color:#111827;">
+          <p><strong>📊 평균 점수:</strong> ${r.mean.toFixed(2)}점</p>
+          <p><strong>⬆️ 최고 점수:</strong> ${r.max}점</p>
+          <p><strong>⬇️ 최저 점수:</strong> ${r.min}점</p>
+        </div>
+        <div style="margin-top:14px;">
+          <button class="btn secondary" id="back-to-menu-btn">메인 메뉴로</button>
+        </div>`;
+      setupModalContent.innerHTML = html;
+      document.getElementById('back-to-menu-btn').addEventListener('click',()=>location.reload());
+    }catch(e){}
+  }
+
+  async function displayHallOfFame(apiUrl, title, period){
+    try{
+      const results = await apiCall(apiUrl,'GET');
+      let html = `<h2 class="headline">🏆 ${title}</h2>
+        <p style="font-size:.9em;color:var(--muted);">${period}</p>
+        <div style="text-align:left;max-height:400px;overflow:auto;padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff; color:#111827;">`;
+      if(results.length===0) html += "<p>완료된 게임 기록이 없습니다.</p>";
+      else results.forEach((r,i)=>{ html += `<p style="margin:.3rem 0"><strong>${i+1}위.</strong> ${r.player_name} - ${r.total_score}점</p>`; });
+      html += `</div><div style="margin-top:12px;"><button class="btn secondary" id="back-to-menu-btn">메인 메뉴로</button></div>`;
+      setupModalContent.classList.add('glass');
+      setupModalContent.innerHTML = html;
+      mainMenuModal.style.display='none';
+      setupModal.style.display='flex';
+      document.getElementById('back-to-menu-btn').addEventListener('click',()=>location.reload());
+    }catch(e){}
+  }
+
+  async function displayAllLogs(){
+    try{
+      const logs = await apiCall('/api/get-all-logs/','GET');
+      let html = `<h2 class="headline">📜 전체 로그</h2><p style="color:var(--muted)">(최근 100개 턴 기록)</p>
+        <div style="text-align:left;max-height:400px;overflow:auto;padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff; color:#111827;">`;
+      if(logs.length===0){ html += "<p>기록된 로그가 없습니다.</p>"; }
+      else{
+        logs.forEach(l=>{
+          html += `<p style="border-bottom:1px solid rgba(0,0,0,.06);padding:8px 0;margin:0;">
+            [${l.created_at}] <strong>${l.player_name}</strong> - ${l.score_obtained}점 (턴 ${l.turn_number}, 족보: ${l.chosen_category})
+          </p>`;
+        });
+      }
+      html += `</div><div style="margin-top:12px;"><button class="btn secondary" id="back-to-menu-btn">메인 메뉴로</button></div>`;
+      setupModalContent.classList.add('glass');
+      setupModalContent.innerHTML = html;
+      mainMenuModal.style.display='none';
+      setupModal.style.display='flex';
+      document.getElementById('back-to-menu-btn').addEventListener('click',()=>location.reload());
+    }catch(e){}
+  }
+
+  // ---------- 개발자 모달 ----------
+  function openDevModal(){
+    document.getElementById('dev-modal').style.display = 'flex';
+    document.getElementById('dev-msg').textContent = '';
+  }
+  function closeDevModal(){ document.getElementById('dev-modal').style.display = 'none'; }
+  document.getElementById('btn-dev-close')?.addEventListener('click', closeDevModal);
+
+  // ---------- 공통 다운로드 ----------
+  async function devDownload(dataset){
+    const pass  = document.getElementById('dev-pass').value.trim();
+    const start = document.getElementById('dev-start').value.trim();
+    const end   = document.getElementById('dev-end').value.trim();
+    if(!pass){ setDevMsg('비밀번호를 입력하세요.'); return; }
+
+    const fd = new FormData();
+    fd.append('password', pass);
+    fd.append('dataset', dataset);
+    if(start) fd.append('start', start);
+    if(end)   fd.append('end', end);
+
+    try{
+      const res = await fetch('/api/dev/export/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrftoken }, body: fd
+      });
+      if(!res.ok){
+        const text = await res.text(); setDevMsg(`오류: ${res.status} ${text}`); return;
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const m = /filename="([^"]+)"/.exec(cd);
+      const filename = m ? m[1] : (dataset + '_logs.csv');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      setDevMsg('다운로드 완료');
+    }catch(err){ console.error(err); setDevMsg('네트워크 오류'); }
+  }
+  function setDevMsg(msg){ document.getElementById('dev-msg').textContent = msg; }
+  document.getElementById('btn-export-events')?.addEventListener('click', ()=>devDownload('events'));
+  document.getElementById('btn-export-turns')?.addEventListener('click', ()=>devDownload('turns'));
+
+  /* -------------------- 초기 메뉴 바인딩 -------------------- */
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const cpuOptions = CPU_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('');
+
+    document.getElementById('menu-vs-cpu').addEventListener('click', ()=>showSetupModal(
+      'CPU와 대결',
+      [
+        `<input type="text" id="player-name-0" placeholder="플레이어 이름">`,
+        `<select id="cpu-type">${cpuOptions}</select>`
+      ],
+      ()=>{
+        const playerName = document.getElementById('player-name-0').value.trim() || '플레이어';
+        const cpuType = document.getElementById('cpu-type').value;
+        handleStartGame([
+          { name: playerName, is_cpu:false },
+          { name: 'CPU', is_cpu:true, type: cpuType }
+        ]);
+      }
+    ));
+
+    document.getElementById('menu-dev-tools').addEventListener('click', ()=>{
+      mainMenuModal.style.display = 'none'; openDevModal();
+    });
+
+    document.getElementById('menu-vs-player').addEventListener('click', ()=>showSetupModal(
+      '플레이어끼리 대결',
+      [
+        '<input type="text" id="player-name-0" placeholder="플레이어 1 이름" value="플레이어 1">',
+        '<input type="text" id="player-name-1" placeholder="플레이어 2 이름" value="플레이어 2">'
+      ],
+      ()=>{
+        const p1 = document.getElementById('player-name-0').value.trim() || 'P1';
+        const p2 = document.getElementById('player-name-1').value.trim() || 'P2';
+        handleStartGame([
+          { name: p1, is_cpu:false },
+          { name: p2, is_cpu:false }
+        ]);
+      }
+    ));
+
+    document.getElementById('menu-cpu-vs-cpu').addEventListener('click', ()=>showSetupModal(
+      'CPU끼리 대결',
+      [
+        `<label>CPU 1</label><select id="cpu1-type">${cpuOptions}</select>`,
+        `<label>CPU 2</label><select id="cpu2-type">${cpuOptions}</select>`
+      ],
+      ()=>{
+        const c1 = document.getElementById('cpu1-type').value;
+        const c2 = document.getElementById('cpu2-type').value;
+        handleStartGame([
+          { name:'CPU 1', is_cpu:true, type:c1 },
+          { name:'CPU 2', is_cpu:true, type:c2 }
+        ]);
+      }
+    ));
+
+    document.getElementById('menu-analyze-cpu').addEventListener('click', ()=>showSetupModal(
+      'CPU 성능 분석',
+      [
+        `<label>CPU 유형</label><select id="analyze-cpu-type">${cpuOptions}</select>`,
+        `<label>시뮬레이션 횟수</label><input type="number" id="analyze-count" min="1" value="50">`
+      ],
+      handleAnalyzeCpu
+    ));
+
+    document.getElementById('menu-load-game').addEventListener('click', handleLoadGame);
+    document.getElementById('menu-hall-of-fame').addEventListener('click',
+      ()=>displayHallOfFame('/api/get-hall-of-fame/','명예의 전당 (오늘의 랭킹)','오늘 오전 9시부터'));
+    document.getElementById('menu-weekly-hall-of-fame').addEventListener('click',
+      ()=>displayHallOfFame('/api/get-weekly-high-scores/','주간 명예의 전당','이번 주 수요일 오전 9시부터'));
+    document.getElementById('menu-view-all-logs').addEventListener('click', displayAllLogs);
+    document.getElementById('menu-game-rules').addEventListener('click', showGameRulesModal);
+    document.getElementById('menu-notice').addEventListener('click', showNoticeModal);
+    document.getElementById('menu-patch-notes').addEventListener('click', showPatchNotesModal);
+  });
+  </script>
+</body>
+</html>

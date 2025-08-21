@@ -1,0 +1,55 @@
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>패치노트</title>
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+        <style>
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #333; }
+            .container { max-width: 800px; margin: 0 auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 40px; }
+            h1 { font-size: 2em; margin-bottom: 20px; color: #4CAF50; font-weight: bold; text-align: center; }
+            h3 { font-size: 1.5em; margin-top: 20px; margin-bottom: 10px; color: #555; border-bottom: 2px solid #ddd; padding-bottom: 5px; }
+            ul { list-style-type: disc; padding-left: 20px; margin-top: 10px; }
+            li { margin-bottom: 8px; line-height: 1.5; }
+            .back-button-container { text-align: center; margin-top: 30px; }
+            .back-button { padding: 12px 24px; font-size: 1.1em; border: none; background: #f44336; color: white; border-radius: 8px; cursor: pointer; transition: background 0.3s; }
+            .back-button:hover { background: #da190b; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>패치노트</h1>
+            
+            <h3>v46: 편의성 및 안정성 업데이트</h3>
+            <ul>
+                <li>전화번호 입력 시 대시(-)가 자동으로 추가되도록 기능 개선</li>
+                <li>`git push` 오류 해결을 위한 코드 구조 재정비</li>
+            </ul>
+
+            <h3>v45: 보안 및 이벤트 기능 강화</h3>
+            <ul>
+                <li>점수 조작 방지를 위해 게임 점수 계산 로직을 서버로 이전</li>
+                <li>전화번호 해시를 통해 중복 참여를 방지하고, 최고 점수 갱신 가능하도록 로직 개선</li>
+                <li>CPU 분석 기능에 시뮬레이션 횟수 유효성 검사 로직 추가</li>
+            </ul>
+
+            <h3>v24: 서버-클라이언트 통신 안정화</h3>
+            <ul>
+                <li>`Uncaught ReferenceError` 오류 해결을 위해 함수 스코프 재구성</li>
+                <li>게임 상태를 세션으로 관리하여 페이지 새로고침 시 데이터 유지</li>
+            </ul>
+
+            <h3>v23: 기본 기능 및 UI 개선</h3>
+            <ul>
+                <li>메인 메뉴에 '공지사항' 및 '패치노트' 버튼 추가</li>
+                <li>CPU 플레이어 턴 진행 시 애니메이션 및 로그 기능 추가</li>
+            </ul>
+
+            <div class="back-button-container">
+                <button class="back-button" onclick="window.history.back()">뒤로가기</button>
+            </div>
+        </div>
+    </body>
+    </html>
+    
