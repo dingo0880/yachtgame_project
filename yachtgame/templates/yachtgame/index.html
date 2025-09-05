@@ -279,12 +279,12 @@
         <div style="font-size:.9em;color:var(--muted)">(비우면 전체)</div>
       </div>
 
-      <div style="display:flex; gap:10px; margin-top:6px;">
-        <button id="btn-export-events" class="btn" style="flex:1;">1) 이벤트 로그</button>
-        <button id="btn-export-turns" class="btn" style="flex:1;">2) 턴 로그</button>
-        <button id="btn-export-cpu-turns" class="btn" style="flex:1;">3) CPU 턴 로그</button>
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-top:6px;">
+        <button id="btn-export-events" class="btn">1) 이벤트 로그</button>
+        <button id="btn-export-turns" class="btn">2) 턴 로그</button>
+        <button id="btn-export-cpu-turns" class="btn">3) CPU 턴 로그</button>
       </div>
-       <div style="display:flex; gap:10px; margin-top:6px;">
+       <div style="display:flex; gap:10px; margin-top:10px;">
          <button id="btn-dev-close" class="btn secondary" style="width:100%;">닫기</button>
        </div>
 
@@ -799,20 +799,21 @@
   }
 
   async function handleCollectCpuLogs(){
-    const cpuType = document.getElementById('collect-cpu-type').value;
-    setupModalContent.innerHTML = `<h2 class="headline">🤖 ${cpuType} 로그 수집 중... ⏳</h2><p style="color:var(--muted)">CPU가 한 판을 플레이합니다. 잠시만 기다려주세요...</p>`;
-    try{
-        const r = await apiCall('/api/collect-cpu-logs/', 'POST', { cpu_type: cpuType });
-        let html = `<h2 class="headline">✅ 로그 수집 완료!</h2>
-        <p style="color:var(--muted)">${cpuType} 유형의 CPU 플레이 로그 1건(12턴)이 서버에 저장되었습니다.</p>
-        <p style="color:#111827;"><strong>최종 점수: ${r.final_score}점</strong></p>
-        <div style="margin-top:14px;">
-          <button class="btn secondary" id="back-to-menu-btn">메인 메뉴로</button>
-        </div>`;
-      setupModalContent.innerHTML = html;
-      document.getElementById('back-to-menu-btn').addEventListener('click',()=>location.reload());
-    }catch(e){}
-  }
+      const cpuType = document.getElementById('collect-cpu-type').value;
+      const count = document.getElementById('collect-count').value;
+      setupModalContent.innerHTML = `<h2 class="headline">🤖 ${cpuType} 로그 수집 중... ⏳</h2><p style="color:var(--muted)">CPU가 ${count}판을 플레이합니다. 잠시만 기다려주세요...</p>`;
+      try{
+          const r = await apiCall('/api/collect-cpu-logs/', 'POST', { cpu_type: cpuType, count: parseInt(count) });
+          let html = `<h2 class="headline">✅ 로그 수집 완료!</h2>
+          <p style="color:var(--muted)">${cpuType} 유형의 CPU 플레이 로그 ${r.games_collected}건(${r.turns_collected}턴)이 서버에 저장되었습니다.</p>
+          <p style="color:#111827;"><strong>평균 점수: ${r.average_score.toFixed(2)}점</strong></p>
+          <div style="margin-top:14px;">
+            <button class="btn secondary" id="back-to-menu-btn">메인 메뉴로</button>
+          </div>`;
+        setupModalContent.innerHTML = html;
+        document.getElementById('back-to-menu-btn').addEventListener('click',()=>location.reload());
+      }catch(e){}
+    }
 
   async function displayHallOfFame(apiUrl, title, period){
     try{
@@ -966,12 +967,13 @@
       handleAnalyzeCpu
     ));
 
-    // 3. 신규 기능: CPU 로그 수집 메뉴 추가
+    // 3. 신규 기능: CPU 로그 수집 메뉴 (횟수 선택 기능 추가)
     const logCpuOptions = ['엘리트형', '도박형'].map(t=>`<option value="${t}">${t}</option>`).join('');
     document.getElementById('menu-collect-cpu-logs').addEventListener('click', ()=>showSetupModal(
-      'CPU 로그 수집 (1게임)',
+      'CPU 로그 수집',
       [
-        `<label>CPU 유형 (엘리트/도박형만 수집)</label><select id="collect-cpu-type">${logCpuOptions}</select>`
+        `<label>CPU 유형 (엘리트/도박형만 수집)</label><select id="collect-cpu-type">${logCpuOptions}</select>`,
+        `<label>시뮬레이션 횟수</label><input type="number" id="collect-count" min="1" max="100" value="10">`
       ],
       handleCollectCpuLogs
     ));
@@ -990,3 +992,4 @@
   </script>
 </body>
 </html>
+

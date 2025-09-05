@@ -559,7 +559,7 @@ def play_cpu_turn_api(request):
         # 3. 신규 기능: '엘리트형', '도박형' CPU 턴 로그 저장
         if player['type'] in ['엘리트형', '도박형']:
             log_data = {
-                "id": None, # CSV에서는 자동 증가 id가 없으므로 비워둠
+                "id": None,
                 "game_id": game_state['game_id'],
                 "player_name": player['display_name'],
                 "cpu_type": player['type'],
@@ -602,75 +602,83 @@ def play_cpu_turn_api(request):
     except Exception as e:
         return JsonResponse({'error': 'CPU 턴 진행 중 오류가 발생했습니다.', 'detail': str(e)}, status=500)
 
-# 3. 신규 기능: CPU 로그 수집 API
+# 3. 신규 기능: CPU 로그 수집 API (횟수 선택 기능 추가)
 @require_POST
 def collect_cpu_logs_api(request):
     try:
         data = json.loads(request.body)
         cpu_type = data.get('cpu_type')
+        count = int(data.get('count', 1))
 
         if cpu_type not in ['엘리트형', '도박형']:
             return JsonResponse({'error': '로그 수집은 엘리트형 또는 도박형만 가능합니다.'}, status=400)
-
-        # --- 1게임 시뮬레이션 시작 ---
-        game_id = f"cpu-log-{uuid.uuid4()}"
-        player_name = f"CPU_Logger_{cpu_type}#{game_id[:4].upper()}"
-        scoreboard = {cat: None for cat in CATEGORIES}
+        if not (1 <= count <= 100):
+            return JsonResponse({'error': '시뮬레이션 횟수는 1에서 100 사이여야 합니다.'}, status=400)
         
-        for turn in range(1, 13):
-            turn_buf = _init_turn_buf()
-            dice = [0, 0, 0, 0, 0]
-            kept = []
+        total_turns_collected = 0
+        all_scores = []
+
+        for _ in range(count):
+            game_id = f"cpu-log-{uuid.uuid4()}"
+            player_name = f"CPU_Logger_{cpu_type}#{game_id[:4].upper()}"
+            scoreboard = {cat: None for cat in CATEGORIES}
             
-            for i in range(3):
-                current_dice = list(dice)
-                kept_indices = kept
-                for d_idx in range(5):
-                    if d_idx not in kept_indices:
-                        current_dice[d_idx] = random.randint(1, 6)
+            for turn in range(1, 13):
+                turn_buf = _init_turn_buf()
+                dice = [0, 0, 0, 0, 0]
+                kept = []
                 
-                if i == 0: turn_buf['dice_roll_1'] = ",".join(map(str, current_dice))
-                elif i == 1: turn_buf['dice_roll_2'] = ",".join(map(str, current_dice))
+                for i in range(3):
+                    current_dice = list(dice)
+                    kept_indices = kept
+                    for d_idx in range(5):
+                        if d_idx not in kept_indices:
+                            current_dice[d_idx] = random.randint(1, 6)
+                    
+                    if i == 0: turn_buf['dice_roll_1'] = ",".join(map(str, current_dice))
+                    elif i == 1: turn_buf['dice_roll_2'] = ",".join(map(str, current_dice))
 
-                if i < 2:
-                    kept = cpu_decide_dice_to_keep(current_dice, scoreboard, cpu_type, turn, 3 - i)
-                    kept_values_str = ",".join([str(current_dice[idx]) for idx in kept]) if kept else ""
-                    if i == 0: turn_buf['kept_after_roll_1'] = kept_values_str
-                    elif i == 1: turn_buf['kept_after_roll_2'] = kept_values_str
-                    if len(kept) == 5:
-                        dice = current_dice
-                        break
-                dice = current_dice
+                    if i < 2:
+                        kept = cpu_decide_dice_to_keep(current_dice, scoreboard, cpu_type, turn, 3 - i)
+                        kept_values_str = ",".join([str(current_dice[idx]) for idx in kept]) if kept else ""
+                        if i == 0: turn_buf['kept_after_roll_1'] = kept_values_str
+                        elif i == 1: turn_buf['kept_after_roll_2'] = kept_values_str
+                        if len(kept) == 5:
+                            dice = current_dice
+                            break
+                    dice = current_dice
 
-            turn_buf['score_state_before'] = deepcopy(scoreboard)
-            category = cpu_select_category_dispatcher(dice, scoreboard, cpu_type, turn)
-            score = score_category(dice, category)
-            scoreboard[category] = score
+                turn_buf['score_state_before'] = deepcopy(scoreboard)
+                category = cpu_select_category_dispatcher(dice, scoreboard, cpu_type, turn)
+                score = score_category(dice, category)
+                scoreboard[category] = score
 
-            # 로그 데이터 생성 및 CSV 저장
-            log_data = {
-                "id": None,
-                "game_id": game_id,
-                "player_name": player_name,
-                "cpu_type": cpu_type,
-                "turn_number": turn,
-                "score_state_before": json.dumps(turn_buf['score_state_before'] or {}, ensure_ascii=False),
-                "dice_roll_1": turn_buf['dice_roll_1'] or "",
-                "kept_after_roll_1": turn_buf['kept_after_roll_1'] or "",
-                "dice_roll_2": turn_buf['dice_roll_2'] or "",
-                "kept_after_roll_2": turn_buf['kept_after_roll_2'] or "",
-                "final_dice_state": ",".join(map(str, dice)),
-                "chosen_category": category,
-                "score_obtained": score,
-                "created_at": timezone.now().isoformat()
-            }
-            log_cpu_turn_to_csv(log_data)
-        
-        up = calculate_upper_score(scoreboard)
-        bonus = calculate_bonus(up)
-        total = sum(v for v in scoreboard.values() if v is not None) + bonus
-        
-        return JsonResponse({'message': '로그 수집 완료', 'final_score': total})
+                log_data = {
+                    "id": None, "game_id": game_id, "player_name": player_name,
+                    "cpu_type": cpu_type, "turn_number": turn,
+                    "score_state_before": json.dumps(turn_buf['score_state_before'] or {}, ensure_ascii=False),
+                    "dice_roll_1": turn_buf['dice_roll_1'] or "",
+                    "kept_after_roll_1": turn_buf['kept_after_roll_1'] or "",
+                    "dice_roll_2": turn_buf['dice_roll_2'] or "",
+                    "kept_after_roll_2": turn_buf['kept_after_roll_2'] or "",
+                    "final_dice_state": ",".join(map(str, dice)),
+                    "chosen_category": category, "score_obtained": score,
+                    "created_at": timezone.now().isoformat()
+                }
+                log_cpu_turn_to_csv(log_data)
+                total_turns_collected += 1
+
+            up = calculate_upper_score(scoreboard)
+            bonus = calculate_bonus(up)
+            total = sum(v for v in scoreboard.values() if v is not None) + bonus
+            all_scores.append(total)
+
+        return JsonResponse({
+            'message': '로그 수집 완료',
+            'games_collected': count,
+            'turns_collected': total_turns_collected,
+            'average_score': statistics.mean(all_scores) if all_scores else 0
+        })
     except Exception as e:
         return JsonResponse({'error': 'CPU 로그 수집 중 오류 발생', 'detail': str(e)}, status=500)
 
@@ -837,27 +845,37 @@ def export_logs_csv(request):
         if not os.path.exists(CPU_LOG_FILE_PATH):
             return HttpResponseNotFound("CPU 로그 파일이 존재하지 않습니다.")
 
+        pseudo = _Echo()
+        writer = csv.writer(pseudo)
+        
         def stream_cpu_logs():
             with open(CPU_LOG_FILE_PATH, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 yield writer.writerow(reader.fieldnames) # 헤더 먼저 전송
                 for row in reader:
                     try:
-                        created_at_dt = datetime.fromisoformat(row['created_at'])
+                        # 타임존 정보가 없는 경우를 대비하여 처리
+                        created_at_str = row.get('created_at', '')
+                        if '+' in created_at_str:
+                            created_at_dt = datetime.fromisoformat(created_at_str)
+                        else:
+                            created_at_dt = timezone.make_aware(datetime.fromisoformat(created_at_str))
+
                         if start_dt and created_at_dt < start_dt: continue
                         if end_dt and created_at_dt >= end_dt: continue
-                        yield writer.writerow(list(row.values()))
+                        
+                        # reader.fieldnames 순서에 맞춰서 row 값들을 올바르게 가져오도록 수정
+                        yield writer.writerow([row.get(h, '') for h in reader.fieldnames])
                     except (ValueError, TypeError):
                         continue # 날짜 파싱 오류가 있는 행은 건너뜀
         
         filename = _filename("cpu_turn_logs", start_dt, end_dt)
-        pseudo = _Echo()
-        writer = csv.writer(pseudo)
         response = StreamingHttpResponse(stream_cpu_logs(), content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
     if dataset == "events":
+        # ... (이하 로직은 변경 없음) ...
         qs = GameSession.objects.all().order_by("created_at")
         qs = qs.filter(phone_number__isnull=False)
         if start_dt: qs = qs.filter(created_at__gte=start_dt)
@@ -902,3 +920,4 @@ def export_logs_csv(request):
     resp = StreamingHttpResponse(stream(), content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
+
