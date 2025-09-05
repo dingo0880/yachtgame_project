@@ -63,25 +63,53 @@ def log_cpu_turn_to_csv(log_data):
     with csv_writer_lock:
         file_exists = os.path.isfile(CPU_LOG_FILE_PATH)
         os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
-        
+
+        # 헤더 확인 및 불일치 시 롤오버
+        header_mismatch = False
+        if file_exists and os.path.getsize(CPU_LOG_FILE_PATH) > 0:
+            try:
+                with open(CPU_LOG_FILE_PATH, 'r', encoding='utf-8', newline='') as rf:
+                    r = csv.reader(rf)
+                    existing_header = next(r, [])
+                if existing_header != CPU_LOG_HEADERS:
+                    header_mismatch = True
+            except Exception:
+                header_mismatch = True
+
+        if header_mismatch:
+            backup = CPU_LOG_FILE_PATH.replace(
+                '.csv',
+                f'_{datetime.utcnow().strftime("%Y%m%d%H%M%S")}.bak.csv'
+            )
+            try:
+                os.rename(CPU_LOG_FILE_PATH, backup)
+            except OSError:
+                pass
+            file_exists = False
+            with cpu_log_id_lock:
+                cpu_log_id_counter = 0  # 새 파일이므로 리셋
+
+        # ID 증가/복구
         with cpu_log_id_lock:
             if cpu_log_id_counter == 0 and file_exists and os.path.getsize(CPU_LOG_FILE_PATH) > 0:
                 try:
-                    with open(CPU_LOG_FILE_PATH, 'r', encoding='utf-8') as f:
-                        last_line = None
-                        for last_line in f:
-                            pass
-                        if last_line and last_line.strip().split(',')[0].isdigit():
-                            last_id = int(last_line.split(',')[0])
-                            cpu_log_id_counter = last_id
-                except (IOError, IndexError, ValueError):
-                     cpu_log_id_counter = 0
+                    with open(CPU_LOG_FILE_PATH, 'r', encoding='utf-8', newline='') as f:
+                        reader = csv.DictReader(f)
+                        last_id = 0
+                        for row in reader:
+                            try:
+                                last_id = int(row.get('id', 0))
+                            except Exception:
+                                continue
+                        cpu_log_id_counter = last_id
+                except Exception:
+                    cpu_log_id_counter = 0
 
             cpu_log_id_counter += 1
             log_data['id'] = cpu_log_id_counter
-        
-        # [수정] cpu_type을 log_data에서 제거
-        log_to_write = {key: log_data[key] for key in CPU_LOG_HEADERS if key in log_data}
+
+        # cpu_type은 로그에서 제거 (헤더에도 없음)
+        log_to_write = {key: log_data.get(key, "") for key in CPU_LOG_HEADERS}
 
         with open(CPU_LOG_FILE_PATH, 'a', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=CPU_LOG_HEADERS)
@@ -452,7 +480,7 @@ def select_category_api(request):
                 kept_after_roll_1=turn_buf.get('kept_after_roll_1') or "",
                 dice_roll_2=turn_buf.get('dice_roll_2') or "",
                 kept_after_roll_2=turn_buf.get('kept_after_roll_2') or "",
-                final_dice_state=",".join(map(str, sorted(game_state['dice']))),
+                final_dice_state=",".join(map(str, game_state['dice'])),
                 chosen_category=category, score_obtained=score,
                 score_state_before=turn_buf.get('score_state_before') or {}
             )
@@ -553,8 +581,8 @@ def play_cpu_turn_api(request):
             game_state['log'].append(f"[{player['display_name']}] {i+1}차 굴림 결과: {dice}")
             steps.append(deepcopy(game_state))
 
-            if i == 0: turn_buf['dice_roll_1'] = ",".join(map(str, sorted(dice)))
-            elif i == 1: turn_buf['dice_roll_2'] = ",".join(map(str, sorted(dice)))
+            if i == 0: turn_buf['dice_roll_1'] = ",".join(map(str, dice))      # 정렬 없음
+            elif i == 1: turn_buf['dice_roll_2'] = ",".join(map(str, dice))     # 정렬 없음
 
             if i < 2:
                 kept_indices = cpu_decide_dice_to_keep(dice, player['scoreboard'], player['type'], game_state['current_turn'], 2 - i)
@@ -565,8 +593,8 @@ def play_cpu_turn_api(request):
                     game_state['log'].append(f"[{player['display_name']}] 고정: {kept_dice}")
                     steps.append(deepcopy(game_state))
                 
-                if i == 0: turn_buf['kept_after_roll_1'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
-                elif i == 1: turn_buf['kept_after_roll_2'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
+                if i == 0: turn_buf['kept_after_roll_1'] = ",".join(map(str, kept_dice)) if kept_dice else ""
+                elif i == 1: turn_buf['kept_after_roll_2'] = ",".join(map(str, kept_dice)) if kept_dice else ""
                 
                 if len(kept_indices) == 5: break
                 
@@ -596,7 +624,7 @@ def play_cpu_turn_api(request):
                 kept_after_roll_1=turn_buf.get('kept_after_roll_1') or "",
                 dice_roll_2=turn_buf.get('dice_roll_2') or "",
                 kept_after_roll_2=turn_buf.get('kept_after_roll_2') or "",
-                final_dice_state=",".join(map(str, sorted(dice))),
+                final_dice_state=",".join(map(str, dice)),
                 chosen_category=category,
                 score_obtained=score
             )
@@ -638,22 +666,22 @@ def collect_cpu_logs_api(request):
                 
                 dice = [random.randint(1, 6) for _ in range(5)]
                 for i in range(3):
-                    if i == 0: turn_buf['dice_roll_1'] = ",".join(map(str, sorted(dice)))
-                    elif i == 1: turn_buf['dice_roll_2'] = ",".join(map(str, sorted(dice)))
+                    if i == 0: turn_buf['dice_roll_1'] = ",".join(map(str, dice))   # 정렬 없음
+                    elif i == 1: turn_buf['dice_roll_2'] = ",".join(map(str, dice))  # 정렬 없음
 
                     if i < 2:
                         kept_indices = cpu_decide_dice_to_keep(dice, scoreboard, cpu_type, turn, 2 - i)
                         kept_dice = [dice[idx] for idx in kept_indices]
                         
-                        if i == 0: turn_buf['kept_after_roll_1'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
-                        elif i == 1: turn_buf['kept_after_roll_2'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
+                        if i == 0: turn_buf['kept_after_roll_1'] = ",".join(map(str, kept_dice)) if kept_dice else ""
+                        elif i == 1: turn_buf['kept_after_roll_2'] = ",".join(map(str, kept_dice)) if kept_dice else ""
                         
                         if len(kept_indices) == 5: break
                         
                         reroll_count = 5 - len(kept_indices)
                         dice = kept_dice + [random.randint(1, 6) for _ in range(reroll_count)]
                 
-                final_dice = sorted(dice)
+                final_dice = list(dice)
                 
                 turn_buf['score_state_before'] = deepcopy(scoreboard)
                 category = cpu_select_category_dispatcher(final_dice, scoreboard, cpu_type, turn)
@@ -673,7 +701,7 @@ def collect_cpu_logs_api(request):
                     "final_dice_state": ",".join(map(str, final_dice)),
                     "chosen_category": category, 
                     "score_obtained": score,
-                    "created_at": timezone.now().isoformat()
+                    "created_at": timezone.now().astimezone(dt_timezone.utc).isoformat()
                 }
                 log_cpu_turn_to_csv(log_data)
                 total_turns_collected += 1
@@ -900,51 +928,51 @@ def export_logs_csv(request):
 # 1. 이벤트 기능 비활성화
 # @require_POST
 # def save_event_entry_api(request):
-#     try:
-#         data = json.loads(request.body)
-#         game_id = data.get('game_id')
-#         player_name = data.get('player_name')
-#         phone_number = data.get('phone_number')
-#         recaptcha_token = data.get('recaptcha_token')
+#     try:
+#         data = json.loads(request.body)
+#         game_id = data.get('game_id')
+#         player_name = data.get('player_name')
+#         phone_number = data.get('phone_number')
+#         recaptcha_token = data.get('recaptcha_token')
 
-#         if not all([game_id, player_name, phone_number, recaptcha_token]):
-#             return JsonResponse({'error': '모든 필드를 입력해야 합니다.'}, status=400)
+#         if not all([game_id, player_name, phone_number, recaptcha_token]):
+#             return JsonResponse({'error': '모든 필드를 입력해야 합니다.'}, status=400)
 
-#         verify_payload = {'secret': settings.RECAPTCHA_PRIVATE_KEY, 'response': recaptcha_token}
-#         verify_response = requests.post('https://www.google.com/recaptcha/api/siteverify', data=verify_payload)
-#         result = verify_response.json()
-#         if not result.get('success') or result.get('score', 0) < 0.5:
-#             return JsonResponse({'error': 'reCAPTCHA 인증에 실패했습니다. 봇으로 의심됩니다.'}, status=403)
+#         verify_payload = {'secret': settings.RECAPTCHA_PRIVATE_KEY, 'response': recaptcha_token}
+#         verify_response = requests.post('https://www.google.com/recaptcha/api/siteverify', data=verify_payload)
+#         result = verify_response.json()
+#         if not result.get('success') or result.get('score', 0) < 0.5:
+#             return JsonResponse({'error': 'reCAPTCHA 인증에 실패했습니다. 봇으로 의심됩니다.'}, status=403)
 
-#         cleaned_phone_number = phone_number.replace('-', '').strip()
-#         phone_hash = hashlib.sha256(cleaned_phone_number.encode()).hexdigest()
+#         cleaned_phone_number = phone_number.replace('-', '').strip()
+#         phone_hash = hashlib.sha256(cleaned_phone_number.encode()).hexdigest()
 
-#         now_kst = timezone.localtime(timezone.now())
-#         today_start_kst = now_kst.replace(hour=9, minute=0, second=0, microsecond=0)
-#         if now_kst.hour < 9:
-#             today_start_kst -= timedelta(days=1)
+#         now_kst = timezone.localtime(timezone.now())
+#         today_start_kst = now_kst.replace(hour=9, minute=0, second=0, microsecond=0)
+#         if now_kst.hour < 9:
+#             today_start_kst -= timedelta(days=1)
 
-#         existing_entry = GameSession.objects.filter(
-#             phone_number=phone_hash,
-#             created_at__gte=today_start_kst
-#         ).order_by('-total_score').first()
+#         existing_entry = GameSession.objects.filter(
+#             phone_number=phone_hash,
+#             created_at__gte=today_start_kst
+#         ).order_by('-total_score').first()
 
-#         try:
-#             current_game_session = GameSession.objects.get(game_id=game_id, player_name=player_name)
-#         except GameSession.DoesNotExist:
-#             return JsonResponse({'error': '유효하지 않은 게임 정보입니다.'}, status=404)
+#         try:
+#             current_game_session = GameSession.objects.get(game_id=game_id, player_name=player_name)
+#         except GameSession.DoesNotExist:
+#             return JsonResponse({'error': '유효하지 않은 게임 정보입니다.'}, status=404)
 
-#         if existing_entry:
-#             if current_game_session.total_score > existing_entry.total_score:
-#                 existing_entry.total_score = current_game_session.total_score
-#                 existing_entry.save()
-#                 return JsonResponse({'message': '최고 기록 갱신 성공!'})
-#             else:
-#                 return JsonResponse({'error': '기존 점수보다 낮아 갱신되지 않았습니다.'}, status=400)
-#         else:
-#             current_game_session.phone_number = phone_hash
-#             current_game_session.save()
-#             return JsonResponse({'message': '이벤트 참여가 완료되었습니다.'})
+#         if existing_entry:
+#             if current_game_session.total_score > existing_entry.total_score:
+#                 existing_entry.total_score = current_game_session.total_score
+#                 existing_entry.save()
+#                 return JsonResponse({'message': '최고 기록 갱신 성공!'})
+#             else:
+#                 return JsonResponse({'error': '기존 점수보다 낮아 갱신되지 않았습니다.'}, status=400)
+#         else:
+#             current_game_session.phone_number = phone_hash
+#             current_game_session.save()
+#             return JsonResponse({'message': '이벤트 참여가 완료되었습니다.'})
 
-#     except Exception as e:
-#         return JsonResponse({'error': str(e)}, status=400)
+#     except Exception as e:
+#         return JsonResponse({'error': str(e)}, status=400)
