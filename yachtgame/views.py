@@ -37,7 +37,7 @@ CATEGORIES = [
     "Four of a Kind", "Full House", "Small Straight", "Large Straight",
     "Yahtzee", "Chance"
 ]
-CPU_TYPES = ["엘리트형", "도박형", "공격형", "안정형", "일반형", "ML형"] # ML형은 프론트엔드에서만 사용
+CPU_TYPES = ["엘리트형", "도박형", "공격형", "안정형", "일반형", "ML형"]
 BASE_WEIGHTS = {
     "Ones": 0.3, "Twos": 0.4, "Threes": 0.6, "Fours": 0.8, "Fives": 1.0, "Sixes": 1.2,
     "Four of a Kind": 1.8, "Full House": 2.0, "Small Straight": 1.1,
@@ -45,7 +45,6 @@ BASE_WEIGHTS = {
 }
 DEV_PASSWORD = "Split5234"
 
-# 3. 신규 기능: CPU 로그 파일 관련 상수
 CPU_LOG_FILE_PATH = os.path.join(settings.MEDIA_ROOT, 'cpu_turn_logs.csv')
 CPU_LOG_HEADERS = [
     "id","game_id","player_name","cpu_type","turn_number",
@@ -53,21 +52,38 @@ CPU_LOG_HEADERS = [
     "dice_roll_1","kept_after_roll_1","dice_roll_2","kept_after_roll_2",
     "final_dice_state","chosen_category","score_obtained","created_at"
 ]
-# 파일 쓰기 충돌 방지를 위한 Lock
 csv_writer_lock = threading.Lock()
+# ID 생성을 위한 전역 카운터 및 락 추가
+cpu_log_id_counter = 0
+cpu_log_id_lock = threading.Lock()
 
-
-# -------------------- CPU 로그 기록 함수 (신규) --------------------
+# -------------------- CPU 로그 기록 함수 --------------------
 def log_cpu_turn_to_csv(log_data):
     """CPU 턴 로그를 CSV 파일에 기록합니다."""
+    global cpu_log_id_counter
     with csv_writer_lock:
         file_exists = os.path.isfile(CPU_LOG_FILE_PATH)
-        # media 디렉토리가 없으면 생성
         os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
+        
+        with cpu_log_id_lock:
+            # 서버 시작 시 한번만 CSV의 마지막 ID를 읽어와 카운터 초기화
+            if cpu_log_id_counter == 0 and file_exists:
+                try:
+                    with open(CPU_LOG_FILE_PATH, 'r', encoding='utf-8') as f:
+                        # 마지막 줄을 효율적으로 읽기
+                        last_line = f.readlines()[-1]
+                        if last_line.strip():
+                            last_id = int(last_line.split(',')[0])
+                            cpu_log_id_counter = last_id
+                except (IOError, IndexError, ValueError):
+                     cpu_log_id_counter = 0 # 파일 읽기 실패 시 0부터 시작
+
+            cpu_log_id_counter += 1
+            log_data['id'] = cpu_log_id_counter
         
         with open(CPU_LOG_FILE_PATH, 'a', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=CPU_LOG_HEADERS)
-            if not file_exists:
+            if not file_exists or os.path.getsize(CPU_LOG_FILE_PATH) == 0:
                 writer.writeheader()
             writer.writerow(log_data)
 
@@ -160,13 +176,18 @@ def cpu_select_category_dispatcher(dice, scoreboard, cpu_type, turn):
 def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim=100):
     total = 0
     for _ in range(n_sim):
-        sim = list(dice)
-        reroll = [i for i in range(5) if i not in keep_idxs]
-        for _ in range(rolls_left):
-            for i in reroll:
-                sim[i] = random.randint(1, 6)
-        best = cpu_select_category_elite(sim, scoreboard, turn)
-        total += score_category(sim, best)
+        sim = [dice[i] for i in keep_idxs]
+        reroll_count = 5 - len(sim)
+        sim_reroll = sim + [random.randint(1, 6) for _ in range(reroll_count)]
+        if rolls_left == 2: # 2번 더 굴릴 수 있다면
+            # 한 번 더 굴리는 것까지 시뮬레이션
+            temp_kept_idxs = cpu_decide_dice_to_keep(sim_reroll, scoreboard, "엘리트형", turn, 1)
+            temp_kept_dice = [sim_reroll[i] for i in temp_kept_idxs]
+            final_reroll_count = 5 - len(temp_kept_dice)
+            sim_reroll = temp_kept_dice + [random.randint(1, 6) for _ in range(final_reroll_count)]
+
+        best = cpu_select_category_elite(sim_reroll, scoreboard, turn)
+        total += score_category(sim_reroll, best)
     return total / n_sim
 
 
@@ -174,7 +195,7 @@ def get_candidate_keeps(dice, scoreboard, turn):
     cands = [list(c) for r in range(6) for c in itertools.combinations(range(5), r)]
     unique, seen = [], set()
     for cand in cands:
-        key = tuple(sorted(cand))
+        key = tuple(sorted([dice[i] for i in cand]))
         if key not in seen:
             unique.append(cand)
             seen.add(key)
@@ -194,39 +215,92 @@ def strategic_keep_elite(dice, scoreboard, turn, rolls_left):
     return best_keep
 
 
+def get_recommended_target_gambler(dice, scoreboard):
+    possible = [c for c, s in scoreboard.items() if s is None]
+    if not possible: return "Chance"
+    return max(possible, key=lambda c: score_category(dice, c) * BASE_WEIGHTS.get(c, 1.0))
+
 def strategic_keep_gambler(dice, scoreboard):
     counts = Counter(dice)
+    if scoreboard.get("Yahtzee") is None and 5 in counts.values(): return list(range(5))
+    if scoreboard.get("Full House") is None and sorted(counts.values()) == [2, 3]: return list(range(5))
     if scoreboard.get("Yahtzee") is None and counts and counts.most_common(1)[0][1] >= 4:
         num = counts.most_common(1)[0][0]
         return [i for i, d in enumerate(dice) if d == num]
-    if counts:
+    
+    tgt = get_recommended_target_gambler(dice, scoreboard)
+    if not tgt: return []
+
+    keep_indices = []
+    if tgt in CATEGORIES[:6]:
+        face = CATEGORIES.index(tgt) + 1
+        keep_indices = [i for i, d in enumerate(dice) if d == face]
+    elif tgt in ("Four of a Kind", "Yahtzee"):
+        if counts:
+            num = counts.most_common(1)[0][0]
+            keep_indices = [i for i, d in enumerate(dice) if d == num]
+    elif tgt == "Full House":
+        nums_to_keep = [num for num, count in counts.items() if count in [2, 3]]
+        if nums_to_keep:
+            keep_indices = [i for i, d in enumerate(dice) if d in nums_to_keep]
+    elif tgt in ("Small Straight", "Large Straight"):
+        dice_set = sorted(list(set(dice)))
+        if not dice_set: return []
+        best_seq = []
+        current_seq = [dice_set[0]]
+        for i in range(1, len(dice_set)):
+            if dice_set[i] == dice_set[i-1] + 1: current_seq.append(dice_set[i])
+            else:
+                if len(current_seq) > len(best_seq): best_seq = current_seq
+                current_seq = [dice_set[i]]
+        if len(current_seq) > len(best_seq): best_seq = current_seq
+        if len(best_seq) >= 3:
+            temp_dice = list(dice)
+            indices = []
+            for val in best_seq:
+                try:
+                    idx = temp_dice.index(val)
+                    indices.append(idx)
+                    temp_dice[idx] = -1
+                except ValueError: pass
+            keep_indices = indices
+
+    if not keep_indices and counts:
         num = counts.most_common(1)[0][0]
-        return [i for i, d in enumerate(dice) if d == num]
-    return []
+        keep_indices = [i for i, d in enumerate(dice) if d == num]
+        
+    return keep_indices
 
 
 def strategic_keep_attack(dice, scoreboard, turn):
     counts = Counter(dice)
-    if scoreboard.get("Yahtzee") is None and counts and counts.most_common(1)[0][1] >= 3:
-        num = counts.most_common(1)[0][0]
-        return [i for i, d in enumerate(dice) if d == num]
-    if counts:
-        num = counts.most_common(1)[0][0]
-        return [i for i, d in enumerate(dice) if d == num]
+    if scoreboard.get("Yahtzee") is None and counts.most_common(1) and counts.most_common(1)[0][1] >= 3:
+        return [i for i, d in enumerate(dice) if d == counts.most_common(1)[0][0]]
+    if scoreboard.get("Full House") is None and sorted(counts.values()) == [2, 3]:
+        return list(range(5))
+    possible = [c for c, s in scoreboard.items() if s is None]
+    if not possible: return []
+    rec = max(possible, key=lambda c: score_category(dice, c) * BASE_WEIGHTS.get(c, 1.0))
+    if rec in CATEGORIES[:6]:
+        return [i for i, d in enumerate(dice) if d == CATEGORIES.index(rec) + 1]
+    if counts: return [i for i, d in enumerate(dice) if d == counts.most_common(1)[0][0]]
     return []
 
 
 def strategic_keep_defense(dice, scoreboard, turn):
+    counts = Counter(dice)
     upper_score = calculate_upper_score(scoreboard)
     remain_upper = [c for c in CATEGORIES[:6] if scoreboard.get(c) is None]
     if upper_score < 63 and remain_upper:
         rec = max(remain_upper, key=lambda c: score_category(dice, c))
         face = CATEGORIES.index(rec) + 1
         return [i for i, d in enumerate(dice) if d == face]
-    counts = Counter(dice)
-    if counts:
-        num = counts.most_common(1)[0][0]
-        return [i for i, d in enumerate(dice) if d == num]
+    possible = [c for c, s in scoreboard.items() if s is None]
+    if not possible: return list(range(5))
+    rec = max(possible, key=lambda c: score_category(dice, c))
+    if rec in CATEGORIES[:6]:
+        return [i for i, d in enumerate(dice) if d == CATEGORIES.index(rec) + 1]
+    if counts: return [i for i, d in enumerate(dice) if d == counts.most_common(1)[0][0]]
     return []
 
 
@@ -249,10 +323,8 @@ def cpu_decide_dice_to_keep(dice, scoreboard, cpu_type, turn, rolls_left):
 # -------------------- 턴 버퍼 --------------------
 def _init_turn_buf():
     return {
-        "dice_roll_1": None,
-        "kept_after_roll_1": None,
-        "dice_roll_2": None,
-        "kept_after_roll_2": None,
+        "dice_roll_1": None, "kept_after_roll_1": None,
+        "dice_roll_2": None, "kept_after_roll_2": None,
         "score_state_before": None,
     }
 
