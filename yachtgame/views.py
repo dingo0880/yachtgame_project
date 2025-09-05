@@ -176,17 +176,15 @@ def cpu_select_category_dispatcher(dice, scoreboard, cpu_type, turn):
 
 
 def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim=100):
-    """[성능 복원] CPU의 기대 점수를 계산합니다. 빠른 시뮬레이션을 위해 단순화된 버전을 사용합니다."""
     total = 0
     for _ in range(n_sim):
-        sim_dice = [dice[i] for i in keep_idxs]
-        reroll_count = 5 - len(sim_dice)
-        # 남은 롤을 모두 소진했을 때의 최종 결과만 한 번 시뮬레이션합니다.
-        final_dice = sim_dice + [random.randint(1, 6) for _ in range(reroll_count * rolls_left)]
-        final_dice = final_dice[:5]
-
-        best_cat = cpu_select_category_elite(final_dice, scoreboard, turn)
-        total += score_category(final_dice, best_cat)
+        sim = list(dice)
+        reroll = [i for i in range(5) if i not in keep_idxs]
+        for _ in range(rolls_left):
+            for i in reroll:
+                sim[i] = random.randint(1, 6)
+        best = cpu_select_category_elite(sim, scoreboard, turn)
+        total += score_category(sim, best)
     return total / n_sim
 
 
