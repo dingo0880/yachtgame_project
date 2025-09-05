@@ -168,24 +168,23 @@ def cpu_select_category_dispatcher(dice, scoreboard, cpu_type, turn):
     if not possible: return "Chance"
     return max(possible, key=lambda cat: score_category(dice, cat))
 
-
-def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim=100):
+def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim=200):
     total = 0
     for _ in range(n_sim):
-        sim_dice = [dice[i] for i in keep_idxs]
-        reroll_count = 5 - len(sim_dice)
-        final_dice = sim_dice + [random.randint(1, 6) for _ in range(reroll_count * rolls_left)]
-        final_dice = final_dice[:5]
-        best_cat = cpu_select_category_elite(final_dice, scoreboard, turn)
-        total += score_category(final_dice, best_cat)
+        sim = list(dice)
+        reroll = [i for i in range(5) if i not in keep_idxs]
+        for _ in range(rolls_left):
+            for i in reroll:
+                sim[i] = random.randint(1, 6)
+        best = cpu_select_category_elite(sim, scoreboard, turn)
+        total += score_category(sim, best)
     return total / n_sim
-
 
 def get_candidate_keeps(dice):
     cands = [list(c) for r in range(6) for c in itertools.combinations(range(5), r)]
     unique, seen = [], set()
     for cand in cands:
-        key = tuple(sorted([dice[i] for i in cand]))
+        key = tuple(sorted(cand))
         if key not in seen:
             unique.append(cand)
             seen.add(key)
@@ -194,7 +193,6 @@ def get_candidate_keeps(dice):
 
 def strategic_keep_elite(dice, scoreboard, turn, rolls_left):
     counts = Counter(dice)
-    # [버그 수정] 투 페어의 가치를 더 높게 평가하여 버리는 현상 방지
     if sorted(counts.values()) == [1, 2, 2] and scoreboard.get("Full House") is None:
         pair_nums = [n for n, c in counts.items() if c == 2]
         return [i for i, d in enumerate(dice) if d in pair_nums]
@@ -252,7 +250,7 @@ def strategic_keep_gambler(dice, scoreboard):
                 try:
                     idx = temp_dice.index(val)
                     indices.append(idx)
-                    temp_dice[idx] = -1
+                    temp_dice[idx] = -1 # Prevent re-picking the same index
                 except ValueError: pass
             keep_indices = indices
 
@@ -303,11 +301,6 @@ def cpu_decide_dice_to_keep(dice, scoreboard, cpu_type, turn, rolls_left):
     return strategic_keep_normal(dice, scoreboard, turn)
 
 
-# -------------------- 턴 버퍼 (이하 코드 생략) --------------------
-# ...
-
-
-
 # -------------------- 턴 버퍼 --------------------
 def _init_turn_buf():
     return {
@@ -316,7 +309,6 @@ def _init_turn_buf():
         "score_state_before": None,
     }
 
-
 def _get_turn_buf(game_state):
     buf = game_state.get("turn_buf")
     if not buf:
@@ -324,16 +316,13 @@ def _get_turn_buf(game_state):
         game_state["turn_buf"] = buf
     return buf
 
-
 def _reset_turn_buf(game_state):
     game_state["turn_buf"] = _init_turn_buf()
-
 
 # -------------------- 페이지 --------------------
 @ensure_csrf_cookie
 def index(request):
     return render(request, 'yachtgame/index.html')
-
 
 # -------------------- 게임 API --------------------
 @require_POST
@@ -347,15 +336,9 @@ def start_game_api(request):
         game_id = str(uuid.uuid4())
         unique_tag = game_id[:4].upper()
         game_state = {
-            'game_id': game_id,
-            'players': [],
-            'current_turn': 1,
-            'current_player_index': 0,
-            'rolls_left': 3,
-            'dice': [0, 0, 0, 0, 0],
-            'kept_indices': [],
-            'is_over': False,
-            'log': [],
+            'game_id': game_id, 'players': [], 'current_turn': 1,
+            'current_player_index': 0, 'rolls_left': 3, 'dice': [0, 0, 0, 0, 0],
+            'kept_indices': [], 'is_over': False, 'log': [],
             'turn_buf': _init_turn_buf(),
         }
         for i, p in enumerate(players_info):
@@ -363,9 +346,7 @@ def start_game_api(request):
             display_name = f"{original_name}#{unique_tag}" if not p.get('is_cpu') \
                            else f"{p.get('name', 'CPU')} ({p.get('type')})"
             player_state = {
-                'id': i,
-                'name': original_name,
-                'display_name': display_name,
+                'id': i, 'name': original_name, 'display_name': display_name,
                 'is_cpu': p.get('is_cpu', False),
                 'type': p.get('type') if p.get('is_cpu') else None,
                 'scoreboard': {cat: None for cat in CATEGORIES}
@@ -376,56 +357,6 @@ def start_game_api(request):
         return JsonResponse(game_state)
     except Exception:
         return JsonResponse({'error': '게임 시작 중 오류가 발생했습니다.'}, status=500)
-
-@require_POST
-def select_category_cpu_api(request):
-    try:
-        game_state = request.session.get('game_state')
-        if not game_state or game_state.get('is_over'):
-            return JsonResponse({'error': '활성화된 게임이 없습니다.'}, status=400)
-
-        player = game_state['players'][game_state['current_player_index']]
-        if not player.get('is_cpu'):
-            return JsonResponse({'error': '사람 플레이어는 일반 엔드포인트를 사용하세요.'}, status=400)
-
-        data = json.loads(request.body)
-        category = data.get('category')
-
-        if category not in CATEGORIES or player['scoreboard'][category] is not None or game_state['rolls_left'] == 3:
-            return JsonResponse({'error': '잘못된 행동입니다.'}, status=400)
-
-        turn_buf = _get_turn_buf(game_state)
-        turn_buf['score_state_before'] = deepcopy(player['scoreboard'])
-
-        score = score_category(game_state['dice'], category)
-        player['scoreboard'][category] = score
-        game_state['log'].append(f"[{player['display_name']}]가 '{category}'를 선택하여 {score}점을 얻었습니다.")
-
-        game_state['current_player_index'] = (game_state['current_player_index'] + 1) % len(game_state['players'])
-        if game_state['current_player_index'] == 0:
-            game_state['current_turn'] += 1
-
-        game_state['rolls_left'] = 3
-        game_state['dice'] = [0, 0, 0, 0, 0]
-        game_state['kept_indices'] = []
-        _reset_turn_buf(game_state)
-
-        if game_state['current_turn'] > 12:
-            game_state['is_over'] = True
-            for p in game_state['players']:
-                if not p['is_cpu']:
-                    up = calculate_upper_score(p['scoreboard'])
-                    bonus = calculate_bonus(up)
-                    total = sum(v for v in p['scoreboard'].values() if v is not None) + bonus
-                    GameSession.objects.filter(game_id=game_state['game_id']).update(
-                        total_score=total, player_name=p['display_name']
-                    )
-
-        request.session['game_state'] = game_state
-        return JsonResponse(game_state)
-
-    except Exception as e:
-        return JsonResponse({'error': 'CPU 카테고리 확정 중 오류', 'detail': str(e)}, status=500)
 
 @require_POST
 def roll_dice_api(request):
@@ -444,26 +375,19 @@ def roll_dice_api(request):
 
         game_state['dice'] = new_dice
         game_state['rolls_left'] -= 1
-
         pidx = game_state.get('current_player_index', 0)
         player = game_state.get('players', [])[pidx]
         pname = player.get('display_name', 'Unknown')
         game_state.get('log', []).append(f"[{pname}] 굴림 결과: [{', '.join(map(str, new_dice))}]")
 
         turn_buf = _get_turn_buf(game_state)
-        if game_state['rolls_left'] == 2 and turn_buf.get('dice_roll_1') is None:
-            turn_buf['dice_roll_1'] = ",".join(map(str, new_dice))
-        elif game_state['rolls_left'] == 1 and turn_buf.get('dice_roll_2') is None:
-            turn_buf['dice_roll_2'] = ",".join(map(str, new_dice))
+        if game_state['rolls_left'] == 2: turn_buf['dice_roll_1'] = ",".join(map(str, new_dice))
+        elif game_state['rolls_left'] == 1: turn_buf['dice_roll_2'] = ",".join(map(str, new_dice))
 
         request.session['game_state'] = game_state
         return JsonResponse(game_state)
-
-    except (IndexError, KeyError):
-        return JsonResponse({'error': '게임 상태에 오류가 발생했습니다. 새 게임을 시작해주세요.'}, status=500)
     except Exception:
-        return JsonResponse({'error': '서버에서 예기치 않은 오류가 발생했습니다.'}, status=500)
-
+        return JsonResponse({'error': '서버 오류'}, status=500)
 
 @require_POST
 def keep_dice_api(request):
@@ -478,7 +402,6 @@ def keep_dice_api(request):
             return JsonResponse({'error': '잘못된 주사위 번호입니다.'}, status=400)
 
         game_state['kept_indices'] = indices_to_keep
-
         turn_buf = _get_turn_buf(game_state)
         kept_values = [str(game_state['dice'][i]) for i in indices_to_keep]
         if game_state['rolls_left'] == 2:
@@ -489,8 +412,7 @@ def keep_dice_api(request):
         request.session['game_state'] = game_state
         return JsonResponse(game_state)
     except Exception:
-        return JsonResponse({'error': '주사위 고정 중 오류가 발생했습니다.'}, status=500)
-
+        return JsonResponse({'error': '주사위 고정 중 오류 발생'}, status=500)
 
 @require_POST
 def select_category_api(request):
@@ -501,18 +423,16 @@ def select_category_api(request):
 
         data = json.loads(request.body)
         category = data.get('category')
-
         player = game_state['players'][game_state['current_player_index']]
 
         if player.get('is_cpu'):
-            return JsonResponse({'error': 'CPU는 전용 엔드포인트를 사용합니다.'}, status=400)
+            return JsonResponse({'error': 'CPU 턴에는 사용할 수 없습니다.'}, status=400)
 
         if category not in CATEGORIES or player['scoreboard'][category] is not None or game_state['rolls_left'] == 3:
             return JsonResponse({'error': '잘못된 행동입니다.'}, status=400)
 
         turn_buf = _get_turn_buf(game_state)
         turn_buf['score_state_before'] = deepcopy(player['scoreboard'])
-
         score = score_category(game_state['dice'], category)
         player['scoreboard'][category] = score
         game_state['log'].append(f"[{player['display_name']}]가 '{category}'를 선택하여 {score}점을 얻었습니다.")
@@ -523,16 +443,14 @@ def select_category_api(request):
                 defaults={'player_name': player['display_name'], 'ip_address': request.META.get('REMOTE_ADDR')}
             )
             TurnLog.objects.create(
-                game_session=game_session,
-                player_name=player['display_name'],
+                game_session=game_session, player_name=player['display_name'],
                 turn_number=game_state['current_turn'],
                 dice_roll_1=turn_buf.get('dice_roll_1') or "",
                 kept_after_roll_1=turn_buf.get('kept_after_roll_1') or "",
                 dice_roll_2=turn_buf.get('dice_roll_2') or "",
                 kept_after_roll_2=turn_buf.get('kept_after_roll_2') or "",
                 final_dice_state=",".join(map(str, sorted(game_state['dice']))),
-                chosen_category=category,
-                score_obtained=score,
+                chosen_category=category, score_obtained=score,
                 score_state_before=turn_buf.get('score_state_before') or {}
             )
 
@@ -558,10 +476,8 @@ def select_category_api(request):
 
         request.session['game_state'] = game_state
         return JsonResponse(game_state)
-
     except Exception as e:
-        return JsonResponse({'error': '족보 선택 중 오류가 발생했습니다.', 'detail': str(e)}, status=500)
-
+        return JsonResponse({'error': str(e)}, status=500)
 
 @require_POST
 def play_cpu_turn_api(request):
@@ -576,60 +492,39 @@ def play_cpu_turn_api(request):
 
         steps = []
         turn_buf = _init_turn_buf()
-
-        # --- Roll 1 ---
+        
         dice = [random.randint(1, 6) for _ in range(5)]
-        game_state['dice'] = dice
-        game_state['rolls_left'] = 2
-        game_state['log'].append(f"[{player['display_name']}] 1차 굴림 결과: {dice}")
-        steps.append(deepcopy(game_state))
-        turn_buf['dice_roll_1'] = ",".join(map(str, sorted(dice)))
-
-        # --- Keep 1 ---
-        kept_indices_1 = cpu_decide_dice_to_keep(dice, player['scoreboard'], player['type'], game_state['current_turn'], 2)
-        game_state['kept_indices'] = kept_indices_1
-        kept_dice_1 = [dice[i] for i in kept_indices_1]
-        if kept_dice_1:
-             game_state['log'].append(f"[{player['display_name']}] 고정: {kept_dice_1}")
-             steps.append(deepcopy(game_state))
-        turn_buf['kept_after_roll_1'] = ",".join(map(str, sorted(kept_dice_1))) if kept_dice_1 else ""
-        
-        # --- Roll 2 & Keep 2 ---
-        final_dice = sorted(kept_dice_1)
-        if len(kept_dice_1) < 5:
-            reroll_count_2 = 5 - len(kept_dice_1)
-            dice_2 = sorted(kept_dice_1 + [random.randint(1, 6) for _ in range(reroll_count_2)])
-            game_state['dice'] = dice_2
-            game_state['rolls_left'] = 1
-            game_state['log'].append(f"[{player['display_name']}] 2차 굴림 결과: {dice_2}")
+        for i in range(3):
+            game_state['dice'] = dice
+            game_state['rolls_left'] = 2 - i
+            game_state['log'].append(f"[{player['display_name']}] {i+1}차 굴림 결과: {dice}")
             steps.append(deepcopy(game_state))
-            turn_buf['dice_roll_2'] = ",".join(map(str, dice_2))
 
-            kept_indices_2 = cpu_decide_dice_to_keep(dice_2, player['scoreboard'], player['type'], game_state['current_turn'], 1)
-            game_state['kept_indices'] = kept_indices_2
-            kept_dice_2 = [dice_2[i] for i in kept_indices_2]
-            if kept_dice_2:
-                game_state['log'].append(f"[{player['display_name']}] 고정: {kept_dice_2}")
-                steps.append(deepcopy(game_state))
-            turn_buf['kept_after_roll_2'] = ",".join(map(str, sorted(kept_dice_2))) if kept_dice_2 else ""
-            
-            # --- Roll 3 (Final) ---
-            if len(kept_dice_2) < 5:
-                 reroll_count_3 = 5 - len(kept_dice_2)
-                 final_dice = sorted(kept_dice_2 + [random.randint(1, 6) for _ in range(reroll_count_3)])
-                 game_state['dice'] = final_dice
-                 game_state['rolls_left'] = 0
-                 game_state['log'].append(f"[{player['display_name']}] 3차 굴림 결과: {final_dice}")
-                 steps.append(deepcopy(game_state))
-            else:
-                 final_dice = sorted(kept_dice_2)
+            if i == 0: turn_buf['dice_roll_1'] = ",".join(map(str, sorted(dice)))
+            elif i == 1: turn_buf['dice_roll_2'] = ",".join(map(str, sorted(dice)))
+
+            if i < 2:
+                kept_indices = cpu_decide_dice_to_keep(dice, player['scoreboard'], player['type'], game_state['current_turn'], 2 - i)
+                game_state['kept_indices'] = kept_indices
+                kept_dice = [dice[idx] for idx in kept_indices]
+                
+                if kept_dice:
+                    game_state['log'].append(f"[{player['display_name']}] 고정: {kept_dice}")
+                    steps.append(deepcopy(game_state))
+                
+                if i == 0: turn_buf['kept_after_roll_1'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
+                elif i == 1: turn_buf['kept_after_roll_2'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
+                
+                if len(kept_indices) == 5: break
+                
+                reroll_count = 5 - len(kept_indices)
+                dice = kept_dice + [random.randint(1, 6) for _ in range(reroll_count)]
         
-        game_state['dice'] = final_dice
-
-        # --- Select Category & Log ---
+        game_state['dice'] = dice
+        
         turn_buf['score_state_before'] = deepcopy(player['scoreboard'])
-        category = cpu_select_category_dispatcher(final_dice, player['scoreboard'], player['type'], game_state['current_turn'])
-        score = score_category(final_dice, category)
+        category = cpu_select_category_dispatcher(dice, player['scoreboard'], player['type'], game_state['current_turn'])
+        score = score_category(dice, category)
         player['scoreboard'][category] = score
         game_state['log'].append(f"[{player['display_name']}]가 '{category}'를 선택하여 {score}점을 얻었습니다.")
 
@@ -640,36 +535,23 @@ def play_cpu_turn_api(request):
                 "score_state_before": json.dumps(turn_buf['score_state_before'] or {}, ensure_ascii=False),
                 "dice_roll_1": turn_buf['dice_roll_1'] or "", "kept_after_roll_1": turn_buf['kept_after_roll_1'] or "",
                 "dice_roll_2": turn_buf.get('dice_roll_2', '') or "", "kept_after_roll_2": turn_buf.get('kept_after_roll_2', '') or "",
-                "final_dice_state": ",".join(map(str, sorted(final_dice))),
+                "final_dice_state": ",".join(map(str, sorted(dice))),
                 "chosen_category": category, "score_obtained": score,
                 "created_at": timezone.now().isoformat()
             }
             log_cpu_turn_to_csv(log_data)
 
         game_state['current_player_index'] = (game_state['current_player_index'] + 1) % len(game_state['players'])
-        if game_state['current_player_index'] == 0:
-            game_state['current_turn'] += 1
-
+        if game_state['current_player_index'] == 0: game_state['current_turn'] += 1
         game_state['rolls_left'] = 3
         game_state['dice'] = [0, 0, 0, 0, 0]
         game_state['kept_indices'] = []
+        if game_state['current_turn'] > 12: game_state['is_over'] = True
         
-        if game_state['current_turn'] > 12:
-            game_state['is_over'] = True
-            for p in game_state['players']:
-                if not p['is_cpu']:
-                    up = calculate_upper_score(p['scoreboard'])
-                    bonus = calculate_bonus(up)
-                    total = sum(v for v in p['scoreboard'].values() if v is not None) + bonus
-                    GameSession.objects.filter(game_id=game_state['game_id']).update(
-                        total_score=total, player_name=p['display_name']
-                    )
-
         request.session['game_state'] = game_state
         return JsonResponse({'steps': steps, 'final_state': game_state})
-
     except Exception as e:
-        return JsonResponse({'error': 'CPU 턴 진행 중 오류가 발생했습니다.', 'detail': str(e)}, status=500)
+        return JsonResponse({'error': str(e)}, status=500)
 
 @require_POST
 def collect_cpu_logs_api(request):
@@ -694,35 +576,25 @@ def collect_cpu_logs_api(request):
             for turn in range(1, 13):
                 turn_buf = _init_turn_buf()
                 
-                # Roll 1
                 dice = [random.randint(1, 6) for _ in range(5)]
-                turn_buf['dice_roll_1'] = ",".join(map(str, sorted(dice)))
-                
-                # Keep 1
-                kept_indices_1 = cpu_decide_dice_to_keep(dice, scoreboard, cpu_type, turn, 2)
-                kept_dice_1 = [dice[i] for i in kept_indices_1]
-                turn_buf['kept_after_roll_1'] = ",".join(map(str, sorted(kept_dice_1))) if kept_dice_1 else ""
+                for i in range(3):
+                    if i == 0: turn_buf['dice_roll_1'] = ",".join(map(str, sorted(dice)))
+                    elif i == 1: turn_buf['dice_roll_2'] = ",".join(map(str, sorted(dice)))
 
-                # Roll 2 & Keep 2
-                dice_2 = sorted(kept_dice_1)
-                kept_dice_2 = []
-                if len(kept_indices_1) < 5:
-                    reroll_count_2 = 5 - len(kept_indices_1)
-                    dice_2 = sorted(kept_dice_1 + [random.randint(1, 6) for _ in range(reroll_count_2)])
-                    turn_buf['dice_roll_2'] = ",".join(map(str, dice_2))
-                    
-                    kept_indices_2 = cpu_decide_dice_to_keep(dice_2, scoreboard, cpu_type, turn, 1)
-                    kept_dice_2 = [dice_2[i] for i in kept_indices_2]
-                    turn_buf['kept_after_roll_2'] = ",".join(map(str, sorted(kept_dice_2))) if kept_dice_2 else ""
+                    if i < 2:
+                        kept_indices = cpu_decide_dice_to_keep(dice, scoreboard, cpu_type, turn, 2 - i)
+                        kept_dice = [dice[idx] for idx in kept_indices]
+                        
+                        if i == 0: turn_buf['kept_after_roll_1'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
+                        elif i == 1: turn_buf['kept_after_roll_2'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
+                        
+                        if len(kept_indices) == 5: break
+                        
+                        reroll_count = 5 - len(kept_indices)
+                        dice = kept_dice + [random.randint(1, 6) for _ in range(reroll_count)]
                 
-                # Roll 3 (Final)
-                final_dice = []
-                if len(kept_dice_2) < 5:
-                     reroll_count_3 = 5 - len(kept_dice_2)
-                     final_dice = sorted(kept_dice_2 + [random.randint(1, 6) for _ in range(reroll_count_3)])
-                else:
-                     final_dice = sorted(kept_dice_2)
-
+                final_dice = sorted(dice)
+                
                 turn_buf['score_state_before'] = deepcopy(scoreboard)
                 category = cpu_select_category_dispatcher(final_dice, scoreboard, cpu_type, turn)
                 score = score_category(final_dice, category)
@@ -734,9 +606,9 @@ def collect_cpu_logs_api(request):
                     "score_state_before": json.dumps(turn_buf['score_state_before'] or {}, ensure_ascii=False),
                     "dice_roll_1": turn_buf['dice_roll_1'] or "",
                     "kept_after_roll_1": turn_buf['kept_after_roll_1'] or "",
-                    "dice_roll_2": turn_buf.get('dice_roll_2', "") or "",
-                    "kept_after_roll_2": turn_buf.get('kept_after_roll_2', "") or "",
-                    "final_dice_state": ",".join(map(str, sorted(final_dice))),
+                    "dice_roll_2": turn_buf.get('dice_roll_2', '') or "",
+                    "kept_after_roll_2": turn_buf.get('kept_after_roll_2', '') or "",
+                    "final_dice_state": ",".join(map(str, final_dice)),
                     "chosen_category": category, "score_obtained": score,
                     "created_at": timezone.now().isoformat()
                 }
@@ -755,29 +627,7 @@ def collect_cpu_logs_api(request):
             'average_score': statistics.mean(all_scores) if all_scores else 0
         })
     except Exception as e:
-        return JsonResponse({'error': 'CPU 로그 수집 중 오류 발생', 'detail': str(e)}, status=500)
-
-
-# -------------------- 이벤트/랭킹/로그 API --------------------
-# 1. 이벤트 기능 비활성화: 관련 API를 주석 처리합니다.
-# @require_POST
-# def save_event_entry_api(request):
-#     ... (기존 코드)
-
-@require_GET
-def get_all_logs_api(request):
-    logs = TurnLog.objects.all().order_by('-created_at')[:100]
-    data = list(logs.values(
-        'player_name', 'turn_number',
-        'dice_roll_1', 'kept_after_roll_1',
-        'dice_roll_2', 'kept_after_roll_2',
-        'final_dice_state', 'chosen_category', 'score_obtained',
-        'created_at'
-    ))
-    for entry in data:
-        entry['created_at'] = timezone.localtime(entry['created_at']).strftime('%Y-%m-%d %H:%M:%S')
-    return JsonResponse(data, safe=False)
-
+        return JsonResponse({'error': str(e)}, status=500)
 
 @require_GET
 def get_game_state_api(request):
@@ -785,7 +635,6 @@ def get_game_state_api(request):
     if game_state and not game_state.get('is_over'):
         return JsonResponse(game_state)
     return JsonResponse({'message': 'No active game found.'}, status=404)
-
 
 @require_POST
 def analyze_cpu_api(request):
@@ -806,8 +655,7 @@ def analyze_cpu_api(request):
                 dice = [random.randint(1, 6) for _ in range(5)]
                 for i in range(2):
                     kept = cpu_decide_dice_to_keep(dice, scoreboard, cpu_type, turn, 2 - i)
-                    if len(kept) == 5:
-                        break
+                    if len(kept) == 5: break
                     reroll_count = 5 - len(kept)
                     dice = [dice[i] for i in kept] + [random.randint(1, 6) for _ in range(reroll_count)]
 
@@ -821,30 +669,23 @@ def analyze_cpu_api(request):
             scores.append(total)
 
         return JsonResponse({
-            'count': count,
-            'mean': statistics.mean(scores),
-            'max': max(scores),
-            'min': min(scores),
+            'count': count, 'mean': statistics.mean(scores), 'max': max(scores), 'min': min(scores),
         })
     except Exception as e:
-        return JsonResponse({'error': 'CPU 분석 중 오류가 발생했습니다.', 'detail': str(e)}, status=500)
-
+        return JsonResponse({'error': str(e)}, status=500)
 
 @require_GET
 def get_hall_of_fame(request):
     try:
         now_kst = timezone.localtime(timezone.now())
         today_start_kst = now_kst.replace(hour=9, minute=0, second=0, microsecond=0)
-        if now_kst.hour < 9:
-            today_start_kst -= timedelta(days=1)
+        if now_kst.hour < 9: today_start_kst -= timedelta(days=1)
         hall = GameSession.objects.filter(
             created_at__gte=today_start_kst, total_score__isnull=False
         ).order_by('-total_score')[:10]
-        data = list(hall.values('player_name', 'total_score'))
-        return JsonResponse(data, safe=False)
+        return JsonResponse(list(hall.values('player_name', 'total_score')), safe=False)
     except Exception:
         return JsonResponse([], safe=False)
-
 
 @require_GET
 def get_weekly_high_scores(request):
@@ -852,33 +693,27 @@ def get_weekly_high_scores(request):
         now_kst = timezone.localtime(timezone.now())
         days_since_wed = (now_kst.weekday() - 2 + 7) % 7
         weekly_start_kst = (now_kst - timedelta(days=days_since_wed)).replace(hour=9, minute=0, second=0, microsecond=0)
-        if now_kst < weekly_start_kst:
-            weekly_start_kst -= timedelta(days=7)
+        if now_kst < weekly_start_kst: weekly_start_kst -= timedelta(days=7)
         weekly_end_kst = weekly_start_kst + timedelta(days=7)
         weekly = GameSession.objects.filter(
             created_at__gte=weekly_start_kst, created_at__lt=weekly_end_kst, total_score__isnull=False
         ).order_by('-total_score')[:10]
-        data = list(weekly.values('player_name', 'total_score'))
-        return JsonResponse(data, safe=False)
+        return JsonResponse(list(weekly.values('player_name', 'total_score')), safe=False)
     except Exception:
         return JsonResponse([], safe=False)
-
 
 @require_GET
 def get_notice(request):
     return render(request, 'yachtgame/notice.html')
 
-
 @require_GET
 def get_patch_notes(request):
     return render(request, 'yachtgame/patch_notes.html')
-
 
 # -------------------- CSV Export (개발자용) --------------------
 class _Echo:
     def write(self, value):
         return value
-
 
 def _parse_date(d):
     if not d: return None
@@ -888,14 +723,12 @@ def _parse_date(d):
     except Exception:
         return None
 
-
 def _filename(prefix, start_dt, end_dt):
     if not start_dt and not end_dt:
         return f"{prefix}_ALL.csv"
     s = start_dt.strftime("%Y%m%d") if start_dt else "NA"
     e = (end_dt - timedelta(days=1)).strftime("%Y%m%d") if end_dt else "NA"
     return f"{prefix}_{s}_{e}.csv"
-
 
 @require_POST
 def export_logs_csv(request):
@@ -907,12 +740,9 @@ def export_logs_csv(request):
     if dataset not in ("events", "turns", "cpu_turns"):
         return HttpResponseBadRequest("dataset must be 'events', 'turns', or 'cpu_turns'")
 
-    start_dt_str = request.POST.get("start")
-    end_dt_str = request.POST.get("end")
-    start_dt = _parse_date(start_dt_str)
-    end_dt = _parse_date(end_dt_str)
-    if end_dt:
-        end_dt += timedelta(days=1)
+    start_dt = _parse_date(request.POST.get("start"))
+    end_dt = _parse_date(request.POST.get("end"))
+    if end_dt: end_dt += timedelta(days=1)
 
     if dataset == "cpu_turns":
         if not os.path.exists(CPU_LOG_FILE_PATH):
@@ -945,9 +775,8 @@ def export_logs_csv(request):
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
-    if dataset == "events":
-        qs = GameSession.objects.all().order_by("created_at")
-        qs = qs.filter(phone_number__isnull=False)
+    elif dataset == "events":
+        qs = GameSession.objects.filter(phone_number__isnull=False).order_by("created_at")
         if start_dt: qs = qs.filter(created_at__gte=start_dt)
         if end_dt: qs = qs.filter(created_at__lt=end_dt)
         headers = ["created_at", "game_id", "player_name", "total_score", "phone_hash", "ip_address"]
@@ -959,7 +788,7 @@ def export_logs_csv(request):
         filename = _filename("event_logs", start_dt, end_dt)
 
     else:  # "turns"
-        qs = TurnLog.objects.select_related("game_session").all().order_by("created_at")
+        qs = TurnLog.objects.select_related("game_session").order_by("created_at")
         if start_dt: qs = qs.filter(created_at__gte=start_dt)
         if end_dt: qs = qs.filter(created_at__lt=end_dt)
         headers = [
@@ -982,7 +811,6 @@ def export_logs_csv(request):
                 ]
         filename = _filename("turn_logs", start_dt, end_dt)
 
-
     pseudo = _Echo()
     writer = csv.writer(pseudo)
     def stream():
@@ -991,4 +819,56 @@ def export_logs_csv(request):
     resp = StreamingHttpResponse(stream(), content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
+
+# 1. 이벤트 기능 비활성화
+# @require_POST
+# def save_event_entry_api(request):
+#     try:
+#         data = json.loads(request.body)
+#         game_id = data.get('game_id')
+#         player_name = data.get('player_name')
+#         phone_number = data.get('phone_number')
+#         recaptcha_token = data.get('recaptcha_token')
+
+#         if not all([game_id, player_name, phone_number, recaptcha_token]):
+#             return JsonResponse({'error': '모든 필드를 입력해야 합니다.'}, status=400)
+
+#         verify_payload = {'secret': settings.RECAPTCHA_PRIVATE_KEY, 'response': recaptcha_token}
+#         verify_response = requests.post('https://www.google.com/recaptcha/api/siteverify', data=verify_payload)
+#         result = verify_response.json()
+#         if not result.get('success') or result.get('score', 0) < 0.5:
+#             return JsonResponse({'error': 'reCAPTCHA 인증에 실패했습니다. 봇으로 의심됩니다.'}, status=403)
+
+#         cleaned_phone_number = phone_number.replace('-', '').strip()
+#         phone_hash = hashlib.sha256(cleaned_phone_number.encode()).hexdigest()
+
+#         now_kst = timezone.localtime(timezone.now())
+#         today_start_kst = now_kst.replace(hour=9, minute=0, second=0, microsecond=0)
+#         if now_kst.hour < 9:
+#             today_start_kst -= timedelta(days=1)
+
+#         existing_entry = GameSession.objects.filter(
+#             phone_number=phone_hash,
+#             created_at__gte=today_start_kst
+#         ).order_by('-total_score').first()
+
+#         try:
+#             current_game_session = GameSession.objects.get(game_id=game_id, player_name=player_name)
+#         except GameSession.DoesNotExist:
+#             return JsonResponse({'error': '유효하지 않은 게임 정보입니다.'}, status=404)
+
+#         if existing_entry:
+#             if current_game_session.total_score > existing_entry.total_score:
+#                 existing_entry.total_score = current_game_session.total_score
+#                 existing_entry.save()
+#                 return JsonResponse({'message': '최고 기록 갱신 성공!'})
+#             else:
+#                 return JsonResponse({'error': '기존 점수보다 낮아 갱신되지 않았습니다.'}, status=400)
+#         else:
+#             current_game_session.phone_number = phone_hash
+#             current_game_session.save()
+#             return JsonResponse({'message': '이벤트 참여가 완료되었습니다.'})
+
+#     except Exception as e:
+#         return JsonResponse({'error': str(e)}, status=400)
 
