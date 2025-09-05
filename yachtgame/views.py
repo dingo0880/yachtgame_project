@@ -171,7 +171,7 @@ def cpu_select_category_dispatcher(dice, scoreboard, cpu_type, turn):
     if not possible: return "Chance"
     return max(possible, key=lambda cat: score_category(dice, cat))
 
-def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim=200):
+def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim=100):
     total = 0
     for _ in range(n_sim):
         sim = list(dice)
