@@ -45,6 +45,48 @@ BASE_WEIGHTS = {
 }
 DEV_PASSWORD = "Split5234"
 
+CPU_LOG_FILE_PATH = os.path.join(settings.MEDIA_ROOT, 'cpu_turn_logs.csv')
+CPU_LOG_HEADERS = [
+    "id","game_id","player_name","cpu_type","turn_number",
+    "score_state_before",
+    "dice_roll_1","kept_after_roll_1","dice_roll_2","kept_after_roll_2",
+    "final_dice_state","chosen_category","score_obtained","created_at"
+]
+csv_writer_lock = threading.Lock()
+cpu_log_id_counter = 0
+cpu_log_id_lock = threading.Lock()
+
+# -------------------- CPU 로그 기록 함수 --------------------
+def log_cpu_turn_to_csv(log_data):
+    """CPU 턴 로그를 CSV 파일에 기록합니다."""
+    global cpu_log_id_counter
+    with csv_writer_lock:
+        file_exists = os.path.isfile(CPU_LOG_FILE_PATH)
+        os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
+        
+        with cpu_log_id_lock:
+            if cpu_log_id_counter == 0 and file_exists and os.path.getsize(CPU_LOG_FILE_PATH) > 0:
+                try:
+                    with open(CPU_LOG_FILE_PATH, 'r', encoding='utf-8') as f:
+                        last_line = None
+                        for last_line in f:
+                            pass
+                        if last_line and last_line.strip().split(',')[0].isdigit():
+                            last_id = int(last_line.strip().split(',')[0])
+                            cpu_log_id_counter = last_id
+                except (IOError, IndexError, ValueError):
+                     cpu_log_id_counter = 0
+
+            cpu_log_id_counter += 1
+            log_data['id'] = cpu_log_id_counter
+        
+        with open(CPU_LOG_FILE_PATH, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=CPU_LOG_HEADERS)
+            if not file_exists or os.path.getsize(CPU_LOG_FILE_PATH) == 0:
+                writer.writeheader()
+            writer.writerow(log_data)
+
+
 # -------------------- 점수 계산 --------------------
 def score_category(dice, category):
     counts = Counter(dice)
@@ -126,7 +168,7 @@ def cpu_select_category_dispatcher(dice, scoreboard, cpu_type, turn):
     if not possible: return "Chance"
     return max(possible, key=lambda cat: score_category(dice, cat))
 
-def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim=200):
+def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim=100):
     total = 0
     for _ in range(n_sim):
         sim = list(dice)
@@ -138,7 +180,7 @@ def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim
         total += score_category(sim, best)
     return total / n_sim
 
-def get_candidate_keeps(dice, scoreboard, turn):
+def get_candidate_keeps(dice):
     cands = [list(c) for r in range(6) for c in itertools.combinations(range(5), r)]
     unique, seen = [], set()
     for cand in cands:
@@ -155,7 +197,7 @@ def strategic_keep_elite(dice, scoreboard, turn, rolls_left):
         pair_nums = [n for n, c in counts.items() if c == 2]
         return [i for i, d in enumerate(dice) if d in pair_nums]
     best_keep, best_ev = [], -1
-    for keep in get_candidate_keeps(dice, scoreboard, turn):
+    for keep in get_candidate_keeps(dice):
         ev = estimate_expected_score(dice, keep, scoreboard, turn, rolls_left)
         if ev > best_ev:
             best_ev, best_keep = ev, keep
@@ -402,7 +444,6 @@ def select_category_api(request):
             )
             TurnLog.objects.create(
                 game_session=game_session, player_name=player['display_name'],
-                cpu_type='', # 사람 플레이어는 cpu_type을 비워둠
                 turn_number=game_state['current_turn'],
                 dice_roll_1=turn_buf.get('dice_roll_1') or "",
                 kept_after_roll_1=turn_buf.get('kept_after_roll_1') or "",
@@ -535,27 +576,19 @@ def play_cpu_turn_api(request):
         score = score_category(dice, category)
         player['scoreboard'][category] = score
         game_state['log'].append(f"[{player['display_name']}]가 '{category}'를 선택하여 {score}점을 얻었습니다.")
-        
-        # [통합] CPU 로그도 데이터베이스에 저장
-        with transaction.atomic():
-            game_session, _ = GameSession.objects.get_or_create(
-                game_id=game_state['game_id'],
-                defaults={'player_name': player['display_name'], 'ip_address': 'CPU_PLAYER'}
-            )
-            TurnLog.objects.create(
-                game_session=game_session,
-                player_name=player['display_name'],
-                cpu_type=player['type'],
-                turn_number=game_state['current_turn'],
-                score_state_before=turn_buf.get('score_state_before') or {},
-                dice_roll_1=turn_buf.get('dice_roll_1') or "",
-                kept_after_roll_1=turn_buf.get('kept_after_roll_1') or "",
-                dice_roll_2=turn_buf.get('dice_roll_2') or "",
-                kept_after_roll_2=turn_buf.get('kept_after_roll_2') or "",
-                final_dice_state=",".join(map(str, sorted(dice))),
-                chosen_category=category,
-                score_obtained=score
-            )
+
+        if player['type'] in ['엘리트형', '도박형']:
+            log_data = {
+                "id": None, "game_id": game_state['game_id'], "player_name": player['display_name'],
+                "cpu_type": player['type'], "turn_number": game_state['current_turn'],
+                "score_state_before": json.dumps(turn_buf['score_state_before'] or {}, ensure_ascii=False),
+                "dice_roll_1": turn_buf['dice_roll_1'] or "", "kept_after_roll_1": turn_buf['kept_after_roll_1'] or "",
+                "dice_roll_2": turn_buf.get('dice_roll_2', '') or "", "kept_after_roll_2": turn_buf.get('kept_after_roll_2', '') or "",
+                "final_dice_state": ",".join(map(str, sorted(dice))),
+                "chosen_category": category, "score_obtained": score,
+                "created_at": timezone.now().isoformat()
+            }
+            log_cpu_turn_to_csv(log_data)
 
         game_state['current_player_index'] = (game_state['current_player_index'] + 1) % len(game_state['players'])
         if game_state['current_player_index'] == 0: game_state['current_turn'] += 1
@@ -585,67 +618,56 @@ def collect_cpu_logs_api(request):
         all_scores = []
 
         for _ in range(count):
-            game_id_uuid = uuid.uuid4()
-            player_name = f"CPU_Logger_{cpu_type}#{str(game_id_uuid)[:4].upper()}"
+            game_id = f"cpu-log-{uuid.uuid4()}"
+            player_name = f"CPU_Logger_{cpu_type}#{game_id[:4].upper()}"
             scoreboard = {cat: None for cat in CATEGORIES}
-
-            with transaction.atomic():
-                game_session = GameSession.objects.create(
-                    game_id=game_id_uuid,
-                    player_name=player_name,
-                    ip_address="CPU_LOGGER"
-                )
-
-                for turn in range(1, 13):
-                    turn_buf = _init_turn_buf()
-                    
-                    dice = [random.randint(1, 6) for _ in range(5)]
-                    for i in range(3):
-                        if i == 0: turn_buf['dice_roll_1'] = ",".join(map(str, sorted(dice)))
-                        elif i == 1: turn_buf['dice_roll_2'] = ",".join(map(str, sorted(dice)))
-
-                        if i < 2:
-                            kept_indices = cpu_decide_dice_to_keep(dice, scoreboard, cpu_type, turn, 2 - i)
-                            kept_dice = [dice[idx] for idx in kept_indices]
-                            
-                            if i == 0: turn_buf['kept_after_roll_1'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
-                            elif i == 1: turn_buf['kept_after_roll_2'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
-                            
-                            if len(kept_indices) == 5: break
-                            
-                            reroll_count = 5 - len(kept_indices)
-                            dice = kept_dice + [random.randint(1, 6) for _ in range(reroll_count)]
-                    
-                    final_dice = sorted(dice)
-                    
-                    turn_buf['score_state_before'] = deepcopy(scoreboard)
-                    category = cpu_select_category_dispatcher(final_dice, scoreboard, cpu_type, turn)
-                    score = score_category(final_dice, category)
-                    scoreboard[category] = score
-
-                    TurnLog.objects.create(
-                        game_session=game_session,
-                        player_name=player_name,
-                        cpu_type=cpu_type,
-                        turn_number=turn,
-                        score_state_before=turn_buf.get('score_state_before') or {},
-                        dice_roll_1=turn_buf.get('dice_roll_1') or "",
-                        kept_after_roll_1=turn_buf.get('kept_after_roll_1') or "",
-                        dice_roll_2=turn_buf.get('dice_roll_2') or "",
-                        kept_after_roll_2=turn_buf.get('kept_after_roll_2') or "",
-                        final_dice_state=",".join(map(str, final_dice)),
-                        chosen_category=category,
-                        score_obtained=score
-                    )
-                    total_turns_collected += 1
-
-                up = calculate_upper_score(scoreboard)
-                bonus = calculate_bonus(up)
-                total = sum(v for v in scoreboard.values() if v is not None) + bonus
-                all_scores.append(total)
+            
+            for turn in range(1, 13):
+                turn_buf = _init_turn_buf()
                 
-                game_session.total_score = total
-                game_session.save()
+                dice = [random.randint(1, 6) for _ in range(5)]
+                for i in range(3):
+                    if i == 0: turn_buf['dice_roll_1'] = ",".join(map(str, sorted(dice)))
+                    elif i == 1: turn_buf['dice_roll_2'] = ",".join(map(str, sorted(dice)))
+
+                    if i < 2:
+                        kept_indices = cpu_decide_dice_to_keep(dice, scoreboard, cpu_type, turn, 2 - i)
+                        kept_dice = [dice[idx] for idx in kept_indices]
+                        
+                        if i == 0: turn_buf['kept_after_roll_1'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
+                        elif i == 1: turn_buf['kept_after_roll_2'] = ",".join(map(str, sorted(kept_dice))) if kept_dice else ""
+                        
+                        if len(kept_indices) == 5: break
+                        
+                        reroll_count = 5 - len(kept_indices)
+                        dice = kept_dice + [random.randint(1, 6) for _ in range(reroll_count)]
+                
+                final_dice = sorted(dice)
+                
+                turn_buf['score_state_before'] = deepcopy(scoreboard)
+                category = cpu_select_category_dispatcher(final_dice, scoreboard, cpu_type, turn)
+                score = score_category(final_dice, category)
+                scoreboard[category] = score
+
+                log_data = {
+                    "id": None, "game_id": game_id, "player_name": player_name,
+                    "cpu_type": cpu_type, "turn_number": turn,
+                    "score_state_before": json.dumps(turn_buf['score_state_before'] or {}, ensure_ascii=False),
+                    "dice_roll_1": turn_buf['dice_roll_1'] or "",
+                    "kept_after_roll_1": turn_buf['kept_after_roll_1'] or "",
+                    "dice_roll_2": turn_buf.get('dice_roll_2', '') or "",
+                    "kept_after_roll_2": turn_buf.get('kept_after_roll_2', '') or "",
+                    "final_dice_state": ",".join(map(str, final_dice)),
+                    "chosen_category": category, "score_obtained": score,
+                    "created_at": timezone.now().isoformat()
+                }
+                log_cpu_turn_to_csv(log_data)
+                total_turns_collected += 1
+
+            up = calculate_upper_score(scoreboard)
+            bonus = calculate_bonus(up)
+            total = sum(v for v in scoreboard.values() if v is not None) + bonus
+            all_scores.append(total)
 
         return JsonResponse({
             'message': '로그 수집 완료',
@@ -778,14 +800,45 @@ def export_logs_csv(request):
         return HttpResponseForbidden("invalid password")
 
     dataset = request.POST.get("dataset", "")
-    if dataset not in ("events", "turns"):
-        return HttpResponseBadRequest("dataset must be 'events' or 'turns'")
+    if dataset not in ("events", "turns", "cpu_turns"):
+        return HttpResponseBadRequest("dataset must be 'events', 'turns', or 'cpu_turns'")
 
     start_dt = _parse_date(request.POST.get("start"))
     end_dt = _parse_date(request.POST.get("end"))
     if end_dt: end_dt += timedelta(days=1)
 
-    if dataset == "events":
+    if dataset == "cpu_turns":
+        if not os.path.exists(CPU_LOG_FILE_PATH):
+            return HttpResponseNotFound("CPU 로그 파일이 존재하지 않습니다.")
+
+        pseudo = _Echo()
+        writer = csv.writer(pseudo)
+        
+        def stream_cpu_logs():
+            with open(CPU_LOG_FILE_PATH, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                yield writer.writerow(reader.fieldnames)
+                for row in reader:
+                    try:
+                        created_at_str = row.get('created_at', '')
+                        if '+' in created_at_str:
+                            created_at_dt = datetime.fromisoformat(created_at_str)
+                        else:
+                            created_at_dt = timezone.make_aware(datetime.fromisoformat(created_at_str))
+
+                        if start_dt and created_at_dt < start_dt: continue
+                        if end_dt and created_at_dt >= end_dt: continue
+                        
+                        yield writer.writerow([row.get(h, '') for h in reader.fieldnames])
+                    except (ValueError, TypeError):
+                        continue
+        
+        filename = _filename("cpu_turn_logs", start_dt, end_dt)
+        response = StreamingHttpResponse(stream_cpu_logs(), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+    elif dataset == "events":
         qs = GameSession.objects.filter(phone_number__isnull=False).order_by("created_at")
         if start_dt: qs = qs.filter(created_at__gte=start_dt)
         if end_dt: qs = qs.filter(created_at__lt=end_dt)
@@ -802,7 +855,7 @@ def export_logs_csv(request):
         if start_dt: qs = qs.filter(created_at__gte=start_dt)
         if end_dt: qs = qs.filter(created_at__lt=end_dt)
         headers = [
-            "id","game_id","player_name","cpu_type","turn_number","score_state_before",
+            "id","game_id","player_name","turn_number","score_state_before",
             "dice_roll_1","kept_after_roll_1","dice_roll_2","kept_after_roll_2",
             "final_dice_state","chosen_category","score_obtained","created_at"
         ]
@@ -813,7 +866,7 @@ def export_logs_csv(request):
                 score_before_json = json.dumps(r.score_state_before or {}, ensure_ascii=False)
                 created_iso = r.created_at.astimezone(dt_timezone.utc).isoformat()
                 yield [
-                    r.id, gid, r.player_name, r.cpu_type or "", r.turn_number, score_before_json,
+                    r.id, gid, r.player_name, r.turn_number, score_before_json,
                     r.dice_roll_1 or "", r.kept_after_roll_1 or "",
                     r.dice_roll_2 or "", r.kept_after_roll_2 or "",
                     r.final_dice_state or "", r.chosen_category or "",
