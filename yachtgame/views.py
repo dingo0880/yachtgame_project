@@ -197,7 +197,6 @@ def strategic_keep_elite(dice, scoreboard, turn, rolls_left):
         pair_nums = [n for n, c in counts.items() if c == 2]
         return [i for i, d in enumerate(dice) if d in pair_nums]
     best_keep, best_ev = [], -1
-    # get_candidate_keeps의 인자가 하나이므로, 그에 맞게 호출
     for keep in get_candidate_keeps(dice):
         ev = estimate_expected_score(dice, keep, scoreboard, turn, rolls_left)
         if ev > best_ev:
@@ -251,7 +250,7 @@ def strategic_keep_gambler(dice, scoreboard):
                 try:
                     idx = temp_dice.index(val)
                     indices.append(idx)
-                    temp_dice[idx] = -1 # Prevent re-picking the same index
+                    temp_dice[idx] = -1
                 except ValueError: pass
             keep_indices = indices
 
@@ -479,6 +478,55 @@ def select_category_api(request):
         return JsonResponse(game_state)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+def select_category_cpu_api(request):
+    try:
+        game_state = request.session.get('game_state')
+        if not game_state or game_state.get('is_over'):
+            return JsonResponse({'error': '활성화된 게임이 없습니다.'}, status=400)
+
+        player = game_state['players'][game_state['current_player_index']]
+        if not player.get('is_cpu'):
+            return JsonResponse({'error': '사람 플레이어는 일반 엔드포인트를 사용하세요.'}, status=400)
+
+        data = json.loads(request.body)
+        category = data.get('category')
+
+        if category not in CATEGORIES or player['scoreboard'][category] is not None or game_state['rolls_left'] == 3:
+            return JsonResponse({'error': '잘못된 행동입니다.'}, status=400)
+
+        turn_buf = _get_turn_buf(game_state)
+        turn_buf['score_state_before'] = deepcopy(player['scoreboard'])
+
+        score = score_category(game_state['dice'], category)
+        player['scoreboard'][category] = score
+        game_state['log'].append(f"[{player['display_name']}]가 '{category}'를 선택하여 {score}점을 얻었습니다.")
+
+        game_state['current_player_index'] = (game_state['current_player_index'] + 1) % len(game_state['players'])
+        if game_state['current_player_index'] == 0:
+            game_state['current_turn'] += 1
+
+        game_state['rolls_left'] = 3
+        game_state['dice'] = [0, 0, 0, 0, 0]
+        game_state['kept_indices'] = []
+        _reset_turn_buf(game_state)
+
+        if game_state['current_turn'] > 12:
+            game_state['is_over'] = True
+            for p in game_state['players']:
+                if not p['is_cpu']:
+                    up = calculate_upper_score(p['scoreboard'])
+                    bonus = calculate_bonus(up)
+                    total = sum(v for v in p['scoreboard'].values() if v is not None) + bonus
+                    GameSession.objects.filter(game_id=game_state['game_id']).update(
+                        total_score=total, player_name=p['display_name']
+                    )
+
+        request.session['game_state'] = game_state
+        return JsonResponse(game_state)
+
+    except Exception as e:
+        return JsonResponse({'error': 'CPU 카테고리 확정 중 오류', 'detail': str(e)}, status=500)
 
 @require_POST
 def play_cpu_turn_api(request):
@@ -725,7 +773,6 @@ def get_all_logs_api(request):
         entry['created_at'] = timezone.localtime(entry['created_at']).strftime('%Y-%m-%d %H:%M:%S')
     return JsonResponse(data, safe=False)
 
-
 # -------------------- CSV Export (개발자용) --------------------
 class _Echo:
     def write(self, value):
@@ -835,3 +882,56 @@ def export_logs_csv(request):
     resp = StreamingHttpResponse(stream(), content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
+
+# 1. 이벤트 기능 비활성화
+# @require_POST
+# def save_event_entry_api(request):
+#     try:
+#         data = json.loads(request.body)
+#         game_id = data.get('game_id')
+#         player_name = data.get('player_name')
+#         phone_number = data.get('phone_number')
+#         recaptcha_token = data.get('recaptcha_token')
+
+#         if not all([game_id, player_name, phone_number, recaptcha_token]):
+#             return JsonResponse({'error': '모든 필드를 입력해야 합니다.'}, status=400)
+
+#         verify_payload = {'secret': settings.RECAPTCHA_PRIVATE_KEY, 'response': recaptcha_token}
+#         verify_response = requests.post('https://www.google.com/recaptcha/api/siteverify', data=verify_payload)
+#         result = verify_response.json()
+#         if not result.get('success') or result.get('score', 0) < 0.5:
+#             return JsonResponse({'error': 'reCAPTCHA 인증에 실패했습니다. 봇으로 의심됩니다.'}, status=403)
+
+#         cleaned_phone_number = phone_number.replace('-', '').strip()
+#         phone_hash = hashlib.sha256(cleaned_phone_number.encode()).hexdigest()
+
+#         now_kst = timezone.localtime(timezone.now())
+#         today_start_kst = now_kst.replace(hour=9, minute=0, second=0, microsecond=0)
+#         if now_kst.hour < 9:
+#             today_start_kst -= timedelta(days=1)
+
+#         existing_entry = GameSession.objects.filter(
+#             phone_number=phone_hash,
+#             created_at__gte=today_start_kst
+#         ).order_by('-total_score').first()
+
+#         try:
+#             current_game_session = GameSession.objects.get(game_id=game_id, player_name=player_name)
+#         except GameSession.DoesNotExist:
+#             return JsonResponse({'error': '유효하지 않은 게임 정보입니다.'}, status=404)
+
+#         if existing_entry:
+#             if current_game_session.total_score > existing_entry.total_score:
+#                 existing_entry.total_score = current_game_session.total_score
+#                 existing_entry.save()
+#                 return JsonResponse({'message': '최고 기록 갱신 성공!'})
+#             else:
+#                 return JsonResponse({'error': '기존 점수보다 낮아 갱신되지 않았습니다.'}, status=400)
+#         else:
+#             current_game_session.phone_number = phone_hash
+#             current_game_session.save()
+#             return JsonResponse({'message': '이벤트 참여가 완료되었습니다.'})
+
+#     except Exception as e:
+#         return JsonResponse({'error': str(e)}, status=400)
+
