@@ -541,7 +541,7 @@ def select_category_api(request):
                 kept_after_roll_1=turn_buf.get('kept_after_roll_1') or "",
                 dice_roll_2=turn_buf.get('dice_roll_2') or "",
                 kept_after_roll_2=turn_buf.get('kept_after_roll_2') or "",
-                final_dice_state=",".join(map(str, game_state['dice'])),
+                final_dice_state=",".join(map(str, sorted(game_state['dice']))),
                 chosen_category=category,
                 score_obtained=score,
                 score_state_before=turn_buf.get('score_state_before') or {}
@@ -650,7 +650,7 @@ def play_cpu_turn_api(request):
                 "cpu_type": player['type'], "turn_number": game_state['current_turn'],
                 "score_state_before": json.dumps(turn_buf['score_state_before'] or {}, ensure_ascii=False),
                 "dice_roll_1": turn_buf['dice_roll_1'] or "", "kept_after_roll_1": turn_buf['kept_after_roll_1'] or "",
-                "dice_roll_2": turn_buf['dice_roll_2'] or "", "kept_after_roll_2": turn_buf['kept_after_roll_2'] or "",
+                "dice_roll_2": turn_buf.get('dice_roll_2', '') or "", "kept_after_roll_2": turn_buf.get('kept_after_roll_2', '') or "",
                 "final_dice_state": ",".join(map(str, sorted(final_dice))),
                 "chosen_category": category, "score_obtained": score,
                 "created_at": timezone.now().isoformat()
@@ -714,27 +714,25 @@ def collect_cpu_logs_api(request):
                 kept_dice_1 = [dice[i] for i in kept_indices_1]
                 turn_buf['kept_after_roll_1'] = ",".join(map(str, sorted(kept_dice_1))) if kept_dice_1 else ""
 
-                # Roll 2
-                final_dice_2 = sorted(kept_dice_1)
+                # Roll 2 & Keep 2
+                dice_2 = sorted(kept_dice_1)
                 kept_dice_2 = []
                 if len(kept_indices_1) < 5:
-                    reroll_count_2 = 5 - len(kept_dice_1)
+                    reroll_count_2 = 5 - len(kept_indices_1)
                     dice_2 = sorted(kept_dice_1 + [random.randint(1, 6) for _ in range(reroll_count_2)])
                     turn_buf['dice_roll_2'] = ",".join(map(str, dice_2))
                     
-                    # Keep 2
                     kept_indices_2 = cpu_decide_dice_to_keep(dice_2, scoreboard, cpu_type, turn, 1)
                     kept_dice_2 = [dice_2[i] for i in kept_indices_2]
                     turn_buf['kept_after_roll_2'] = ",".join(map(str, sorted(kept_dice_2))) if kept_dice_2 else ""
-                    final_dice_2 = sorted(kept_dice_2)
                 
                 # Roll 3 (Final)
                 final_dice = []
-                if len(final_dice_2) < 5:
-                     reroll_count_3 = 5 - len(final_dice_2)
-                     final_dice = sorted(final_dice_2 + [random.randint(1, 6) for _ in range(reroll_count_3)])
+                if len(kept_dice_2) < 5:
+                     reroll_count_3 = 5 - len(kept_dice_2)
+                     final_dice = sorted(kept_dice_2 + [random.randint(1, 6) for _ in range(reroll_count_3)])
                 else:
-                     final_dice = sorted(final_dice_2)
+                     final_dice = sorted(kept_dice_2)
 
                 turn_buf['score_state_before'] = deepcopy(scoreboard)
                 category = cpu_select_category_dispatcher(final_dice, scoreboard, cpu_type, turn)
@@ -747,7 +745,7 @@ def collect_cpu_logs_api(request):
                     "score_state_before": json.dumps(turn_buf['score_state_before'] or {}, ensure_ascii=False),
                     "dice_roll_1": turn_buf['dice_roll_1'] or "",
                     "kept_after_roll_1": turn_buf['kept_after_roll_1'] or "",
-                    "dice_roll_2": turn_buf.get('dice_roll_2', "") or "", # .get 추가
+                    "dice_roll_2": turn_buf.get('dice_roll_2', "") or "",
                     "kept_after_roll_2": turn_buf.get('kept_after_roll_2', "") or "",
                     "final_dice_state": ",".join(map(str, sorted(final_dice))),
                     "chosen_category": category, "score_obtained": score,
