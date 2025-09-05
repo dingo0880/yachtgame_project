@@ -21,7 +21,7 @@ from django.http import (
     StreamingHttpResponse,
     HttpResponseBadRequest,
     HttpResponseForbidden,
-    HttpResponseNotFound,
+    HttpResponseNotFound
 )
 from django.shortcuts import render
 from django.utils import timezone
@@ -53,7 +53,6 @@ CPU_LOG_HEADERS = [
     "final_dice_state","chosen_category","score_obtained","created_at"
 ]
 csv_writer_lock = threading.Lock()
-# ID 생성을 위한 전역 카운터 및 락 추가
 cpu_log_id_counter = 0
 cpu_log_id_lock = threading.Lock()
 
@@ -66,11 +65,9 @@ def log_cpu_turn_to_csv(log_data):
         os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
         
         with cpu_log_id_lock:
-            # 서버 시작 시 한번만 CSV의 마지막 ID를 읽어와 카운터 초기화
             if cpu_log_id_counter == 0 and file_exists and os.path.getsize(CPU_LOG_FILE_PATH) > 0:
                 try:
                     with open(CPU_LOG_FILE_PATH, 'r', encoding='utf-8') as f:
-                        # 파일의 마지막 줄을 효율적으로 읽기
                         last_line = None
                         for last_line in f:
                             pass
@@ -78,7 +75,7 @@ def log_cpu_turn_to_csv(log_data):
                             last_id = int(last_line.split(',')[0])
                             cpu_log_id_counter = last_id
                 except (IOError, IndexError, ValueError):
-                     cpu_log_id_counter = 0 # 파일 읽기 실패 시 0부터 시작
+                     cpu_log_id_counter = 0
 
             cpu_log_id_counter += 1
             log_data['id'] = cpu_log_id_counter
@@ -163,32 +160,28 @@ def cpu_select_category_elite(dice, scoreboard, turn):
     return best
 
 
-def cpu_select_category_simple(dice, scoreboard):
+def cpu_select_category_dispatcher(dice, scoreboard, cpu_type, turn):
+    if cpu_type in ["엘리트형", "도박형"]:
+        return cpu_select_category_elite(dice, scoreboard, turn)
+    
     possible = [c for c in CATEGORIES if scoreboard.get(c) is None]
     if not possible: return "Chance"
     return max(possible, key=lambda cat: score_category(dice, cat))
 
 
-def cpu_select_category_dispatcher(dice, scoreboard, cpu_type, turn):
-    if cpu_type == "엘리트형":
-        return cpu_select_category_elite(dice, scoreboard, turn)
-    return cpu_select_category_simple(dice, scoreboard)
-
-
 def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim=100):
     total = 0
     for _ in range(n_sim):
-        sim = list(dice)
-        reroll = [i for i in range(5) if i not in keep_idxs]
-        for _ in range(rolls_left):
-            for i in reroll:
-                sim[i] = random.randint(1, 6)
-        best = cpu_select_category_elite(sim, scoreboard, turn)
-        total += score_category(sim, best)
+        sim_dice = [dice[i] for i in keep_idxs]
+        reroll_count = 5 - len(sim_dice)
+        final_dice = sim_dice + [random.randint(1, 6) for _ in range(reroll_count * rolls_left)]
+        final_dice = final_dice[:5]
+        best_cat = cpu_select_category_elite(final_dice, scoreboard, turn)
+        total += score_category(final_dice, best_cat)
     return total / n_sim
 
 
-def get_candidate_keeps(dice, scoreboard, turn):
+def get_candidate_keeps(dice):
     cands = [list(c) for r in range(6) for c in itertools.combinations(range(5), r)]
     unique, seen = [], set()
     for cand in cands:
@@ -201,11 +194,12 @@ def get_candidate_keeps(dice, scoreboard, turn):
 
 def strategic_keep_elite(dice, scoreboard, turn, rolls_left):
     counts = Counter(dice)
+    # [버그 수정] 투 페어의 가치를 더 높게 평가하여 버리는 현상 방지
     if sorted(counts.values()) == [1, 2, 2] and scoreboard.get("Full House") is None:
         pair_nums = [n for n, c in counts.items() if c == 2]
         return [i for i, d in enumerate(dice) if d in pair_nums]
     best_keep, best_ev = [], -1
-    for keep in get_candidate_keeps(dice, scoreboard, turn):
+    for keep in get_candidate_keeps(dice):
         ev = estimate_expected_score(dice, keep, scoreboard, turn, rolls_left)
         if ev > best_ev:
             best_ev, best_keep = ev, keep
@@ -221,7 +215,7 @@ def strategic_keep_gambler(dice, scoreboard):
     counts = Counter(dice)
     if scoreboard.get("Yahtzee") is None and 5 in counts.values(): return list(range(5))
     if scoreboard.get("Full House") is None and sorted(counts.values()) == [2, 3]: return list(range(5))
-    if scoreboard.get("Yahtzee") is None and counts and counts.most_common(1)[0][1] >= 4:
+    if scoreboard.get("Yahtzee") is None and counts and counts.most_common(1) and counts.most_common(1)[0][1] >= 4:
         num = counts.most_common(1)[0][0]
         return [i for i, d in enumerate(dice) if d == num]
     
@@ -273,31 +267,23 @@ def strategic_keep_attack(dice, scoreboard, turn):
     counts = Counter(dice)
     if scoreboard.get("Yahtzee") is None and counts.most_common(1) and counts.most_common(1)[0][1] >= 3:
         return [i for i, d in enumerate(dice) if d == counts.most_common(1)[0][0]]
-    if scoreboard.get("Full House") is None and sorted(counts.values()) == [2, 3]:
-        return list(range(5))
-    possible = [c for c, s in scoreboard.items() if s is None]
-    if not possible: return []
-    rec = max(possible, key=lambda c: score_category(dice, c) * BASE_WEIGHTS.get(c, 1.0))
-    if rec in CATEGORIES[:6]:
-        return [i for i, d in enumerate(dice) if d == CATEGORIES.index(rec) + 1]
-    if counts: return [i for i, d in enumerate(dice) if d == counts.most_common(1)[0][0]]
+    if counts:
+        num = counts.most_common(1)[0][0]
+        return [i for i, d in enumerate(dice) if d == num]
     return []
 
 
 def strategic_keep_defense(dice, scoreboard, turn):
-    counts = Counter(dice)
     upper_score = calculate_upper_score(scoreboard)
     remain_upper = [c for c in CATEGORIES[:6] if scoreboard.get(c) is None]
     if upper_score < 63 and remain_upper:
         rec = max(remain_upper, key=lambda c: score_category(dice, c))
         face = CATEGORIES.index(rec) + 1
         return [i for i, d in enumerate(dice) if d == face]
-    possible = [c for c, s in scoreboard.items() if s is None]
-    if not possible: return list(range(5))
-    rec = max(possible, key=lambda c: score_category(dice, c))
-    if rec in CATEGORIES[:6]:
-        return [i for i, d in enumerate(dice) if d == CATEGORIES.index(rec) + 1]
-    if counts: return [i for i, d in enumerate(dice) if d == counts.most_common(1)[0][0]]
+    counts = Counter(dice)
+    if counts:
+        num = counts.most_common(1)[0][0]
+        return [i for i, d in enumerate(dice) if d == num]
     return []
 
 
@@ -315,6 +301,11 @@ def cpu_decide_dice_to_keep(dice, scoreboard, cpu_type, turn, rolls_left):
     if cpu_type == "공격형": return strategic_keep_attack(dice, scoreboard, turn)
     if cpu_type == "안정형": return strategic_keep_defense(dice, scoreboard, turn)
     return strategic_keep_normal(dice, scoreboard, turn)
+
+
+# -------------------- 턴 버퍼 (이하 코드 생략) --------------------
+# ...
+
 
 
 # -------------------- 턴 버퍼 --------------------
