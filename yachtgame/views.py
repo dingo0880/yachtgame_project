@@ -72,7 +72,7 @@ def log_cpu_turn_to_csv(log_data):
                         for last_line in f:
                             pass
                         if last_line and last_line.strip().split(',')[0].isdigit():
-                            last_id = int(last_line.split(',')[0])
+                            last_id = int(last_line.strip().split(',')[0])
                             cpu_log_id_counter = last_id
                 except (IOError, IndexError, ValueError):
                      cpu_log_id_counter = 0
