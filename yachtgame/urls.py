@@ -14,6 +14,7 @@ urlpatterns = [
     path('api/get-game-state/', views.get_game_state_api, name='get_game_state_api'),
     path('api/play-cpu-turn/', views.play_cpu_turn_api, name='play_cpu_turn_api'),
     path('api/analyze-cpu/', views.analyze_cpu_api, name='analyze_cpu_api'),
+    path('api/collect-cpu-logs/', views.collect_cpu_logs_api, name='collect_cpu_logs_api'), # 3. 신규 기능
 
     # --- 이벤트/로그/랭킹 ---
     path('api/save-event-entry/', views.save_event_entry_api, name='save_event_entry_api'),
