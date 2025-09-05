@@ -1,7 +1,7 @@
 # yachtgame/urls.py
 from django.urls import path
 from . import views
-from .ml_views import ml_keep_decision, ml_category_decision, ml_health  # ✅ 추가
+from .ml_views import ml_keep_decision, ml_category_decision, ml_health
 
 urlpatterns = [
     path('', views.index, name='index'),
@@ -14,10 +14,10 @@ urlpatterns = [
     path('api/get-game-state/', views.get_game_state_api, name='get_game_state_api'),
     path('api/play-cpu-turn/', views.play_cpu_turn_api, name='play_cpu_turn_api'),
     path('api/analyze-cpu/', views.analyze_cpu_api, name='analyze_cpu_api'),
-    path('api/collect-cpu-logs/', views.collect_cpu_logs_api, name='collect_cpu_logs_api'), # 3. 신규 기능
+    path('api/collect-cpu-logs/', views.collect_cpu_logs_api, name='collect_cpu_logs_api'),
 
     # --- 이벤트/로그/랭킹 ---
-    path('api/save-event-entry/', views.save_event_entry_api, name='save_event_entry_api'),
+    # path('api/save-event-entry/', views.save_event_entry_api, name='save_event_entry_api'), # 1. 이벤트 비활성화: URL 경로도 주석 처리
     path('api/get-all-logs/', views.get_all_logs_api, name='get_all_logs_api'),
     path('api/get-hall-of-fame/', views.get_hall_of_fame, name='get_hall_of_fame'),
     path('api/get-weekly-high-scores/', views.get_weekly_high_scores, name='get_weekly_high_scores'),
@@ -33,3 +33,4 @@ urlpatterns = [
     # --- 개발자 CSV ---
     path('api/dev/export/', views.export_logs_csv, name='export_logs_csv'),
 ]
+
