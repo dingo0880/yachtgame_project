@@ -1,5 +1,3 @@
-# yachtgame/views.py
-
 import csv
 import itertools
 import json
@@ -204,7 +202,7 @@ def cpu_select_category_dispatcher(dice, scoreboard, cpu_type, turn):
     if cpu_type in ["도박형", "공격형"]: return cpu_select_category_gambler(dice, scoreboard, turn)
     return cpu_select_category_normal(dice, scoreboard, turn)
 
-def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim=50):
+def estimate_expected_score(dice, keep_idxs, scoreboard, turn, rolls_left, n_sim=100):
     total = 0
     for _ in range(n_sim):
         sim = list(dice)
@@ -305,7 +303,7 @@ def _get_turn_buf(game_state):
 def _reset_turn_buf(game_state):
     game_state["turn_buf"] = _init_turn_buf()
 
-def _end_turn(game_state, player, category, score, turn_buf):
+def _end_turn(request, game_state, player, category, score, turn_buf):
     with transaction.atomic():
         game_session, _ = GameSession.objects.get_or_create(
             game_id=game_state['game_id'],
@@ -896,7 +894,7 @@ def export_logs_csv(request):
 #             return JsonResponse({'error': '모든 필드를 입력해야 합니다.'}, status=400)
 
 #         verify_payload = {'secret': settings.RECAPTCHA_PRIVATE_KEY, 'response': recaptcha_token}
-#         verify_response = requests.post('https://www.google.com/recaptcha/api/siteverify', data=verify_payload)
+#         verify_response = requests.post('https://www.google.com/recaptcha/api/n', data=verify_payload)
 #         result = verify_response.json()
 #         if not result.get('success') or result.get('score', 0) < 0.5:
 #             return JsonResponse({'error': 'reCAPTCHA 인증에 실패했습니다. 봇으로 의심됩니다.'}, status=403)
@@ -933,3 +931,4 @@ def export_logs_csv(request):
 
 #     except Exception as e:
 #         return JsonResponse({'error': str(e)}, status=400)
+
