@@ -318,7 +318,6 @@ def _end_turn(request, game_state, player, category, score, turn_buf):
         TurnLog.objects.create(
             game_session=game_session,
             player_name=player['display_name'],
-            cpu_type=player.get('type'),
             turn_number=game_state['current_turn'],
             score_state_before=turn_buf.get('score_state_before') or {},
             dice_roll_1=turn_buf.get('dice_roll_1') or "",
