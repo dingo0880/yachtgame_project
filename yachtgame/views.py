@@ -894,7 +894,7 @@ def export_logs_csv(request):
 #             return JsonResponse({'error': '모든 필드를 입력해야 합니다.'}, status=400)
 
 #         verify_payload = {'secret': settings.RECAPTCHA_PRIVATE_KEY, 'response': recaptcha_token}
-#         verify_response = requests.post('https://www.google.com/recaptcha/api/n', data=verify_payload)
+#         verify_response = requests.post('https://www.google.com/recaptcha/api/siteverify', data=verify_payload)
 #         result = verify_response.json()
 #         if not result.get('success') or result.get('score', 0) < 0.5:
 #             return JsonResponse({'error': 'reCAPTCHA 인증에 실패했습니다. 봇으로 의심됩니다.'}, status=403)
