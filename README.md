@@ -39,21 +39,22 @@
 ---
 
 ## 📂 프로젝트 구조
-yachtgame_project/ # Django 프로젝트 루트
-yachtgame/ # 메인 앱 (뷰, 모델, ML API, 템플릿)
-├─ views.py
-├─ models.py
-├─ ml_views.py
-├─ templates/
-└─ management/commands/ # 로그 export 스크립트
-static/ # 개발용 정적
-staticfiles/ # 배포용 정적
-manage.py
-
+```
+    yachtgame_project/ # Django 프로젝트 루트
+    yachtgame/ # 메인 앱 (뷰, 모델, ML API, 템플릿)
+    ├─ views.py
+    ├─ models.py
+    ├─ ml_views.py
+    ├─ templates/
+    └─ management/commands/ # 로그 export 스크립트
+    static/ # 개발용 정적
+    staticfiles/ # 배포용 정적
+    manage.py
+```
 ---
 
 ## 🌐 실제 플레이 링크
-👉 [yatch.ai.kr](http://yatch.ai.kr)
+👉 [yatch.ai.kr](http://yacht.ai.kr/)
 
 ---
 
